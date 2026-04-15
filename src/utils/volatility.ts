@@ -34,6 +34,16 @@ export function calculatePositiveVolatility(
   return isNaN(score) ? 0 : score;
 }
 
+export function preRankBy24h(tickers: BinanceTicker24hr[], limit: number): BinanceTicker24hr[] {
+  return [...tickers]
+    .sort((a, b) => {
+      const aScore = Math.abs(parseFloat(a.priceChangePercent) || 0);
+      const bScore = Math.abs(parseFloat(b.priceChangePercent) || 0);
+      return bScore - aScore;
+    })
+    .slice(0, limit);
+}
+
 export function processAndRankTickers(
   tickers24h: BinanceTicker24hr[],
   tickers1h: BinanceTicker24hr[],

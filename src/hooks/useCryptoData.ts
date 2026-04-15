@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchAll24hrTickers, fetch1hrTickers, fetchSparklineData } from '../api/binance';
-import { processAndRankTickers } from '../utils/volatility';
+import { processAndRankTickers, preRankBy24h } from '../utils/volatility';
 import type { CryptoData } from '../types';
 
 const REFRESH_INTERVAL = 300; // 5 minutes in seconds
@@ -26,10 +26,14 @@ export function useCryptoData(): UseCryptoDataReturn {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [tickers24h, tickers1h] = await Promise.all([
-        fetchAll24hrTickers(),
-        fetch1hrTickers(),
-      ]);
+      // Step 1: Fetch 24h tickers and pre-rank to find top candidates
+      const tickers24h = await fetchAll24hrTickers();
+      const candidates = preRankBy24h(tickers24h, 100);
+
+      // Step 2: Fetch 1h data only for top candidates (API requires symbol list)
+      const tickers1h = await fetch1hrTickers(candidates.map((t) => t.symbol));
+
+      // Step 3: Re-rank by 1h volatility, return top 50
       const top50 = processAndRankTickers(tickers24h, tickers1h);
       const symbols = top50.map((item) => item.symbol);
       const sparklineMap = await fetchSparklineData(symbols);

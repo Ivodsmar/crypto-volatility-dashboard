@@ -38,13 +38,25 @@ export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
   );
 }
 
-export async function fetch1hrTickers(): Promise<BinanceTicker24hr[]> {
-  const response = await fetchWithTimeout(`${BASE_URL}/api/v3/ticker?windowSize=1h`);
-  const tickers: BinanceTicker24hr[] = await response.json();
+export async function fetch1hrTickers(symbols: string[]): Promise<BinanceTicker24hr[]> {
+  const result: BinanceTicker24hr[] = [];
 
-  return tickers.filter(
-    (t) => t.symbol.endsWith('USDT') && !isLeveragedToken(t.symbol),
-  );
+  // Binance /api/v3/ticker?windowSize=1h requires a symbols param, max ~100 per call
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const symbolsParam = encodeURIComponent(JSON.stringify(batch));
+    const response = await fetchWithTimeout(
+      `${BASE_URL}/api/v3/ticker?windowSize=1h&symbols=${symbolsParam}`,
+    );
+    const tickers: BinanceTicker24hr[] = await response.json();
+    result.push(...tickers);
+
+    if (i + BATCH_SIZE < symbols.length) {
+      await delay(BATCH_DELAY);
+    }
+  }
+
+  return result;
 }
 
 export async function fetchKlines(
