@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchAll24hrTickers, fetch1hrTickers, fetchSparklineData } from '../api/binance';
-import { processAndRankTickers, preRankBy24h } from '../utils/volatility';
+import { processAndRankTickers, preRankBy24h, calculateRSI } from '../utils/volatility';
 import type { CryptoData } from '../types';
 
 const REFRESH_INTERVAL = 300; // 5 minutes in seconds
@@ -38,10 +38,14 @@ export function useCryptoData(): UseCryptoDataReturn {
       const symbols = top50.map((item) => item.symbol);
       const sparklineMap = await fetchSparklineData(symbols);
 
-      const merged = top50.map((item) => ({
-        ...item,
-        sparklineData: sparklineMap.get(item.symbol) ?? item.sparklineData,
-      }));
+      const merged = top50.map((item) => {
+        const prices = sparklineMap.get(item.symbol) ?? [];
+        return {
+          ...item,
+          sparklineData: prices,
+          rsi: prices.length > 0 ? calculateRSI(prices) : null,
+        };
+      });
 
       setData(merged);
       setLastUpdated(new Date());

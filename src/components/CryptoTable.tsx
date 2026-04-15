@@ -11,7 +11,7 @@ interface CryptoTableProps {
 
 const SkeletonRow: FC<{ index: number }> = ({ index }) => (
   <tr className="border-b border-[#2b3139]">
-    {Array.from({ length: 8 }).map((_, colIdx) => (
+    {Array.from({ length: 9 }).map((_, colIdx) => (
       <td key={colIdx} className="px-3 py-3">
         <div
           className="h-4 bg-[#2b3139] rounded animate-pulse"
@@ -61,6 +61,9 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
             </th>
             <th className="px-3 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Volatility
+            </th>
+            <th className="px-3 py-2.5 text-center text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
+              RSI (14)
             </th>
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Volume (24h)
@@ -136,6 +139,23 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
                           />
                         </div>
                       </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      {coin.rsi !== null ? (
+                        <span
+                          className={`font-mono text-xs px-1.5 py-0.5 rounded ${
+                            coin.rsi >= 70
+                              ? 'text-[#f6465d] bg-[#f6465d]/10'
+                              : coin.rsi <= 30
+                                ? 'text-[#0ecb81] bg-[#0ecb81]/10'
+                                : 'text-[#b7bdc6]'
+                          }`}
+                        >
+                          {coin.rsi.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="text-[#474d57] text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-[#b7bdc6]">
                       {formatVolume(coin.volume)}

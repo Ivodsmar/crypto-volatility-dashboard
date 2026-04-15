@@ -76,6 +76,7 @@ export function processAndRankTickers(
       highPrice: parseFloat(ticker24h.highPrice) || 0,
       lowPrice: parseFloat(ticker24h.lowPrice) || 0,
       openPrice: parseFloat(ticker24h.openPrice) || 0,
+      rsi: null,
       sparklineData: [],
     });
   }
@@ -83,6 +84,35 @@ export function processAndRankTickers(
   processed.sort((a, b) => b.volatilityScore - a.volatilityScore);
 
   return processed.slice(0, 50);
+}
+
+export function calculateRSI(closePrices: number[], period = 14): number | null {
+  if (closePrices.length < period + 1) return null;
+
+  let avgGain = 0;
+  let avgLoss = 0;
+
+  // Initial average over first `period` changes
+  for (let i = 1; i <= period; i++) {
+    const change = closePrices[i] - closePrices[i - 1];
+    if (change > 0) avgGain += change;
+    else avgLoss += Math.abs(change);
+  }
+  avgGain /= period;
+  avgLoss /= period;
+
+  // Smoothed RSI (Wilder's method) for remaining data
+  for (let i = period + 1; i < closePrices.length; i++) {
+    const change = closePrices[i] - closePrices[i - 1];
+    const gain = change > 0 ? change : 0;
+    const loss = change < 0 ? Math.abs(change) : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
 }
 
 export function formatPrice(price: number): string {

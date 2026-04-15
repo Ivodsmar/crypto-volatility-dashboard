@@ -79,7 +79,7 @@ export async function fetchSparklineData(
     const batch = symbols.slice(i, i + BATCH_SIZE);
 
     const settled = await Promise.allSettled(
-      batch.map((symbol) => fetchKlines(symbol, '1h', 24)),
+      batch.map((symbol) => fetchKlines(symbol, '1h', 30)),
     );
 
     batch.forEach((symbol, index) => {
