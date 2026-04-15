@@ -22,6 +22,9 @@ function App() {
         )}
         <CryptoTable data={data} isLoading={isLoading} />
       </main>
+      <footer className="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-gray-600">
+        Data from Binance API · Auto-refreshes every 5 minutes · Volatility score = composite of 24h change, price range, and volume
+      </footer>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { FC } from 'react';
-import { LineChart, Line, Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
 
 interface SparklineChartProps {
   data: number[];

@@ -63,8 +63,8 @@ export async function fetchSparklineData(
 
     batch.forEach((symbol, index) => {
       const outcome = settled[index];
-      if (outcome.status === 'fulfilled') {
-        const closePrices = outcome.value.map((kline) => parseFloat(kline[4]));
+      if (outcome && outcome.status === 'fulfilled') {
+        const closePrices = outcome.value.map((kline: BinanceKline) => parseFloat(kline[4]));
         result.set(symbol, closePrices);
       }
     });
