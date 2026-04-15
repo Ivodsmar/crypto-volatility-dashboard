@@ -20,26 +20,41 @@ const Header: FC<HeaderProps> = ({ lastUpdated, secondsUntilRefresh, isLoading }
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-gray-900 border-b border-gray-800 px-6 py-4">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Crypto Volatility Dashboard</h1>
-          <p className="text-sm text-gray-400">Top 50 positively volatile coins on Binance</p>
+    <header className="sticky top-0 z-50 bg-[#0b0e11] border-b border-[#2b3139] px-6 py-3">
+      <div className="max-w-[1400px] mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#F0B90B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <h1 className="text-lg font-semibold text-white">Crypto Volatility Dashboard</h1>
+          </div>
+          <span className="text-xs text-[#848e9c] hidden sm:inline">for Flavio, by Ivo</span>
         </div>
-        <div className="flex items-center gap-6 text-sm">
-          <div className="text-gray-400">
+        <div className="flex items-center gap-4 text-xs">
+          <div className="text-[#848e9c]">
             {isLoading && !lastUpdated ? (
-              <span className="text-gray-500">Loading...</span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse" />
+                Loading...
+              </span>
             ) : lastUpdated ? (
-              <span>Updated at {formatLastUpdated(lastUpdated)}</span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                {formatLastUpdated(lastUpdated)}
+              </span>
             ) : (
-              <span className="text-gray-500">No data yet</span>
+              <span>No data yet</span>
             )}
           </div>
           <div
-            className={`font-mono text-gray-300 ${isUrgent ? 'animate-pulse text-emerald-400' : ''}`}
+            className={`font-mono px-2 py-1 rounded text-xs ${
+              isUrgent
+                ? 'text-[#F0B90B] bg-[#F0B90B]/10 animate-pulse'
+                : 'text-[#848e9c] bg-[#1e2329]'
+            }`}
           >
-            Next refresh in {minutes}m {seconds.toString().padStart(2, '0')}s
+            {minutes}:{seconds.toString().padStart(2, '0')}
           </div>
         </div>
       </div>

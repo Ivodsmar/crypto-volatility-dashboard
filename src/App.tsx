@@ -7,23 +7,23 @@ function App() {
   const { data, isLoading, error, lastUpdated, secondsUntilRefresh } = useCryptoData();
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-[#181a20] text-white">
       <LoadingOverlay isLoading={isLoading} />
       <Header
         lastUpdated={lastUpdated}
         secondsUntilRefresh={secondsUntilRefresh}
         isLoading={isLoading}
       />
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-[1400px] mx-auto px-4 py-4">
         {error && (
-          <div className="mb-4 p-4 bg-red-900/30 border border-red-800 rounded-lg text-red-300 text-sm">
+          <div className="mb-4 p-3 bg-[#f6465d]/10 border border-[#f6465d]/30 rounded-lg text-[#f6465d] text-sm">
             {error}
           </div>
         )}
         <CryptoTable data={data} isLoading={isLoading} />
       </main>
-      <footer className="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-gray-600">
-        Data from Binance API · Auto-refreshes every 5 minutes · Volatility score = composite of 24h change, price range, and volume
+      <footer className="max-w-[1400px] mx-auto px-4 py-4 text-center text-[11px] text-[#474d57]">
+        Data from Binance API · Ranked by 1h volatility · Auto-refreshes every 5 minutes
       </footer>
     </div>
   );

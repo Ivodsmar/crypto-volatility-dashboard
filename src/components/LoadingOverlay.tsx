@@ -8,9 +8,9 @@ const LoadingOverlay: FC<LoadingOverlayProps> = ({ isLoading }) => {
   if (!isLoading) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] h-1 bg-gray-900 overflow-hidden">
+    <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 bg-[#0b0e11] overflow-hidden">
       <div
-        className="h-full bg-emerald-500 animate-loading-bar"
+        className="h-full bg-[#F0B90B]"
         style={{
           animation: 'loading-bar 1.5s ease-in-out infinite',
         }}

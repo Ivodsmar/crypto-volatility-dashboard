@@ -22,7 +22,7 @@ const SparklineChart: FC<SparklineChartProps> = ({
     );
   }
 
-  const color = isPositive ? '#22c55e' : '#ef4444';
+  const color = isPositive ? '#0ecb81' : '#f6465d';
   const gradientId = `sparkline-${isPositive ? 'green' : 'red'}-${Math.random().toString(36).slice(2, 8)}`;
   const chartData = data.map((value, index) => ({ index, value }));
 
