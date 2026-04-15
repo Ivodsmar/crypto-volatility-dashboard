@@ -82,13 +82,18 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
                   >
                     <td className="px-3 py-2.5 text-[#848e9c] text-xs">{index + 1}</td>
                     <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2.5">
+                      <a
+                        href={`https://www.binance.com/en/trade/${coin.displaySymbol}_USDT`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 group"
+                      >
                         <CoinIcon symbol={coin.displaySymbol} size={24} />
                         <div className="flex items-baseline gap-1.5">
-                          <span className="font-semibold text-white text-sm">{coin.displaySymbol}</span>
+                          <span className="font-semibold text-white text-sm group-hover:text-[#F0B90B] transition-colors">{coin.displaySymbol}</span>
                           <span className="text-[#848e9c] text-[11px]">/USDT</span>
                         </div>
-                      </div>
+                      </a>
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-white text-sm">
                       ${formatPrice(coin.price)}
