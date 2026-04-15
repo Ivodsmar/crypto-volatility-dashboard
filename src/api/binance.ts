@@ -38,6 +38,15 @@ export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
   );
 }
 
+export async function fetch1hrTickers(): Promise<BinanceTicker24hr[]> {
+  const response = await fetchWithTimeout(`${BASE_URL}/api/v3/ticker?windowSize=1h`);
+  const tickers: BinanceTicker24hr[] = await response.json();
+
+  return tickers.filter(
+    (t) => t.symbol.endsWith('USDT') && !isLeveragedToken(t.symbol),
+  );
+}
+
 export async function fetchKlines(
   symbol: string,
   interval = '1h',

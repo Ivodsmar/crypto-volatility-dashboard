@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchAll24hrTickers, fetchSparklineData } from '../api/binance';
+import { fetchAll24hrTickers, fetch1hrTickers, fetchSparklineData } from '../api/binance';
 import { processAndRankTickers } from '../utils/volatility';
 import type { CryptoData } from '../types';
 
@@ -26,8 +26,11 @@ export function useCryptoData(): UseCryptoDataReturn {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const tickers = await fetchAll24hrTickers();
-      const top50 = processAndRankTickers(tickers);
+      const [tickers24h, tickers1h] = await Promise.all([
+        fetchAll24hrTickers(),
+        fetch1hrTickers(),
+      ]);
+      const top50 = processAndRankTickers(tickers24h, tickers1h);
       const symbols = top50.map((item) => item.symbol);
       const sparklineMap = await fetchSparklineData(symbols);
 

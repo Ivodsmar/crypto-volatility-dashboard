@@ -43,6 +43,7 @@ export interface CryptoData {
   displaySymbol: string;
   price: number;
   priceChangePercent: number;
+  priceChangePercent1h: number;
   volatilityScore: number;
   volume: number;
   highPrice: number;

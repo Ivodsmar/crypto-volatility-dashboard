@@ -1,11 +1,17 @@
 import type { BinanceTicker24hr, CryptoData } from '../types';
 
-export function calculatePositiveVolatility(ticker: BinanceTicker24hr): number {
-  const priceChangePercent = parseFloat(ticker.priceChangePercent) || 0;
-  const highPrice = parseFloat(ticker.highPrice) || 0;
-  const lowPrice = parseFloat(ticker.lowPrice) || 0;
-  const openPrice = parseFloat(ticker.openPrice) || 0;
-  const quoteVolume = parseFloat(ticker.quoteVolume) || 0;
+export function calculatePositiveVolatility(
+  ticker1h: BinanceTicker24hr,
+  ticker24h: BinanceTicker24hr,
+): number {
+  // Score from 1h data
+  const priceChangePercent = parseFloat(ticker1h.priceChangePercent) || 0;
+  const highPrice = parseFloat(ticker1h.highPrice) || 0;
+  const lowPrice = parseFloat(ticker1h.lowPrice) || 0;
+  const openPrice = parseFloat(ticker1h.openPrice) || 0;
+
+  // Volume boost from 24h data (more reliable)
+  const quoteVolume = parseFloat(ticker24h.quoteVolume) || 0;
 
   const changeScore = priceChangePercent > 0
     ? priceChangePercent * 1.5
@@ -28,27 +34,41 @@ export function calculatePositiveVolatility(ticker: BinanceTicker24hr): number {
   return isNaN(score) ? 0 : score;
 }
 
-export function processAndRankTickers(tickers: BinanceTicker24hr[]): CryptoData[] {
-  const processed: CryptoData[] = tickers.map((ticker) => {
-    const volatilityScore = calculatePositiveVolatility(ticker);
-    const symbol = ticker.symbol;
+export function processAndRankTickers(
+  tickers24h: BinanceTicker24hr[],
+  tickers1h: BinanceTicker24hr[],
+): CryptoData[] {
+  const map1h = new Map<string, BinanceTicker24hr>();
+  for (const t of tickers1h) {
+    map1h.set(t.symbol, t);
+  }
+
+  const processed: CryptoData[] = [];
+
+  for (const ticker24h of tickers24h) {
+    const ticker1h = map1h.get(ticker24h.symbol);
+    if (!ticker1h) continue;
+
+    const volatilityScore = calculatePositiveVolatility(ticker1h, ticker24h);
+    const symbol = ticker24h.symbol;
     const displaySymbol = symbol.endsWith('USDT')
       ? symbol.slice(0, -4)
       : symbol;
 
-    return {
+    processed.push({
       symbol,
       displaySymbol,
-      price: parseFloat(ticker.lastPrice) || 0,
-      priceChangePercent: parseFloat(ticker.priceChangePercent) || 0,
+      price: parseFloat(ticker24h.lastPrice) || 0,
+      priceChangePercent: parseFloat(ticker24h.priceChangePercent) || 0,
+      priceChangePercent1h: parseFloat(ticker1h.priceChangePercent) || 0,
       volatilityScore,
-      volume: parseFloat(ticker.quoteVolume) || 0,
-      highPrice: parseFloat(ticker.highPrice) || 0,
-      lowPrice: parseFloat(ticker.lowPrice) || 0,
-      openPrice: parseFloat(ticker.openPrice) || 0,
+      volume: parseFloat(ticker24h.quoteVolume) || 0,
+      highPrice: parseFloat(ticker24h.highPrice) || 0,
+      lowPrice: parseFloat(ticker24h.lowPrice) || 0,
+      openPrice: parseFloat(ticker24h.openPrice) || 0,
       sparklineData: [],
-    };
-  });
+    });
+  }
 
   processed.sort((a, b) => b.volatilityScore - a.volatilityScore);
 

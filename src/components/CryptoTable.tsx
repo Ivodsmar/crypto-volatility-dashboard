@@ -10,12 +10,12 @@ interface CryptoTableProps {
 
 const SkeletonRow: FC<{ index: number }> = ({ index }) => (
   <tr className="border-b border-gray-800">
-    {Array.from({ length: 7 }).map((_, colIdx) => (
+    {Array.from({ length: 8 }).map((_, colIdx) => (
       <td key={colIdx} className="px-4 py-3">
         <div
           className="h-4 bg-gray-800 rounded animate-pulse"
           style={{
-            width: colIdx === 6 ? '120px' : `${40 + ((index + colIdx) % 4) * 20}px`,
+            width: colIdx === 7 ? '120px' : `${40 + ((index + colIdx) % 4) * 20}px`,
             animationDelay: `${(index * 7 + colIdx) * 50}ms`,
           }}
         />
@@ -53,7 +53,10 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
               Price
             </th>
             <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
-              24h Change
+              1h
+            </th>
+            <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
+              24h
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
               Volatility
@@ -81,6 +84,16 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-white">
                     {formatPrice(coin.price)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono">
+                    <span
+                      className={
+                        coin.priceChangePercent1h >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      }
+                    >
+                      {coin.priceChangePercent1h >= 0 ? '▲' : '▼'}{' '}
+                      {formatPercent(coin.priceChangePercent1h)}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">
                     <span
