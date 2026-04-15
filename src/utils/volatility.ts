@@ -94,7 +94,7 @@ export function calculateRSI(closePrices: number[], period = 14): number | null 
 
   // Initial average over first `period` changes
   for (let i = 1; i <= period; i++) {
-    const change = closePrices[i] - closePrices[i - 1];
+    const change = closePrices[i]! - closePrices[i - 1]!;
     if (change > 0) avgGain += change;
     else avgLoss += Math.abs(change);
   }
@@ -103,7 +103,7 @@ export function calculateRSI(closePrices: number[], period = 14): number | null 
 
   // Smoothed RSI (Wilder's method) for remaining data
   for (let i = period + 1; i < closePrices.length; i++) {
-    const change = closePrices[i] - closePrices[i - 1];
+    const change = closePrices[i]! - closePrices[i - 1]!;
     const gain = change > 0 ? change : 0;
     const loss = change < 0 ? Math.abs(change) : 0;
     avgGain = (avgGain * (period - 1) + gain) / period;
