@@ -7,6 +7,7 @@ import CoinIcon from './CoinIcon';
 interface CryptoTableProps {
   data: CryptoData[];
   isLoading: boolean;
+  windowSize: string;
 }
 
 const SkeletonRow: FC<{ index: number }> = ({ index }) => (
@@ -25,7 +26,7 @@ const SkeletonRow: FC<{ index: number }> = ({ index }) => (
   </tr>
 );
 
-const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
+const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, windowSize }) => {
   const maxVolatility = useMemo(() => {
     if (data.length === 0) return 1;
     return Math.max(...data.map((d) => d.volatilityScore));
@@ -54,7 +55,7 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading }) => {
               Price
             </th>
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
-              1h %
+              {windowSize} %
             </th>
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               24h %

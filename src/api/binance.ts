@@ -38,15 +38,25 @@ export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
   );
 }
 
-export async function fetch1hrTickers(symbols: string[]): Promise<BinanceTicker24hr[]> {
+export async function fetchFuturesSymbols(): Promise<Set<string>> {
+  const response = await fetchWithTimeout('https://fapi.binance.com/fapi/v1/exchangeInfo');
+  const data: { symbols: { symbol: string; status: string }[] } = await response.json();
+  return new Set(
+    data.symbols
+      .filter((s) => s.status === 'TRADING' && s.symbol.endsWith('USDT'))
+      .map((s) => s.symbol),
+  );
+}
+
+export async function fetch1hrTickers(symbols: string[], windowSize = '1h'): Promise<BinanceTicker24hr[]> {
   const result: BinanceTicker24hr[] = [];
 
-  // Binance /api/v3/ticker?windowSize=1h requires a symbols param, max ~100 per call
+  // Binance /api/v3/ticker?windowSize=Xh requires a symbols param, max ~100 per call
   for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
     const batch = symbols.slice(i, i + BATCH_SIZE);
     const symbolsParam = encodeURIComponent(JSON.stringify(batch));
     const response = await fetchWithTimeout(
-      `${BASE_URL}/api/v3/ticker?windowSize=1h&symbols=${symbolsParam}`,
+      `${BASE_URL}/api/v3/ticker?windowSize=${windowSize}&symbols=${symbolsParam}`,
     );
     const tickers: BinanceTicker24hr[] = await response.json();
     result.push(...tickers);
