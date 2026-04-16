@@ -38,12 +38,18 @@ export type BinanceKline = [
 ];
 
 // App-level processed types
+export interface VolatilityColumn {
+  timeframe: string;
+  fixed: boolean;
+}
+
 export interface CryptoData {
   symbol: string;
   displaySymbol: string;
   price: number;
   priceChangePercent: number;
-  priceChangePercent1h: number;
+  priceChangePercentByWindow: Record<string, number>;
+  volatilityByWindow: Record<string, number>;
   volatilityScore: number;
   volume: number;
   highPrice: number;

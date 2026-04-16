@@ -1,5 +1,5 @@
 import { FC, useMemo } from 'react';
-import { CryptoData } from '../types';
+import type { CryptoData, VolatilityColumn } from '../types';
 import { formatPrice, formatPercent, formatVolume } from '../utils/volatility';
 import SparklineChart from './SparklineChart';
 import CoinIcon from './CoinIcon';
@@ -7,17 +7,17 @@ import CoinIcon from './CoinIcon';
 interface CryptoTableProps {
   data: CryptoData[];
   isLoading: boolean;
-  windowSize: string;
+  columns: VolatilityColumn[];
 }
 
-const SkeletonRow: FC<{ index: number }> = ({ index }) => (
+const SkeletonRow: FC<{ index: number; columnCount: number }> = ({ index, columnCount }) => (
   <tr className="border-b border-[#2b3139]">
-    {Array.from({ length: 9 }).map((_, colIdx) => (
+    {Array.from({ length: 8 + columnCount }).map((_, colIdx) => (
       <td key={colIdx} className="px-3 py-3">
         <div
           className="h-4 bg-[#2b3139] rounded animate-pulse"
           style={{
-            width: colIdx === 7 ? '100px' : `${40 + ((index + colIdx) % 4) * 15}px`,
+            width: colIdx === 7 + columnCount ? '100px' : `${40 + ((index + colIdx) % 4) * 15}px`,
             animationDelay: `${(index * 8 + colIdx) * 50}ms`,
           }}
         />
@@ -26,7 +26,7 @@ const SkeletonRow: FC<{ index: number }> = ({ index }) => (
   </tr>
 );
 
-const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, windowSize }) => {
+const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
   const maxVolatility = useMemo(() => {
     if (data.length === 0) return 1;
     return Math.max(...data.map((d) => d.volatilityScore));
@@ -54,9 +54,14 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, windowSize }) => {
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Price
             </th>
-            <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
-              {windowSize} %
-            </th>
+            {columns.map((c) => (
+              <th
+                key={c.timeframe}
+                className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]"
+              >
+                {c.timeframe} %
+              </th>
+            ))}
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               24h %
             </th>
@@ -76,7 +81,9 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, windowSize }) => {
         </thead>
         <tbody>
           {isLoading && data.length === 0
-            ? Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} index={i} />)
+            ? Array.from({ length: 10 }).map((_, i) => (
+                <SkeletonRow key={i} index={i} columnCount={columns.length} />
+              ))
             : data.map((coin, index) => {
                 const volRatio = coin.volatilityScore / maxVolatility;
                 return (
@@ -102,15 +109,16 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, windowSize }) => {
                     <td className="px-3 py-2.5 text-right font-mono text-white text-sm">
                       ${formatPrice(coin.price)}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs">
-                      <span
-                        className={
-                          coin.priceChangePercent1h >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
-                        }
-                      >
-                        {formatPercent(coin.priceChangePercent1h)}
-                      </span>
-                    </td>
+                    {columns.map((c) => {
+                      const v = coin.priceChangePercentByWindow[c.timeframe] ?? 0;
+                      return (
+                        <td key={c.timeframe} className="px-3 py-2.5 text-right font-mono text-xs">
+                          <span className={v >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}>
+                            {formatPercent(v)}
+                          </span>
+                        </td>
+                      );
+                    })}
                     <td className="px-3 py-2.5 text-right font-mono text-xs">
                       <span
                         className={

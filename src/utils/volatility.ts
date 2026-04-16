@@ -46,20 +46,40 @@ export function preRankBy24h(tickers: BinanceTicker24hr[], limit: number): Binan
 
 export function processAndRankTickers(
   tickers24h: BinanceTicker24hr[],
-  tickers1h: BinanceTicker24hr[],
+  tickersByWindow: Map<string, BinanceTicker24hr[]>,
+  rankingTimeframe: string,
 ): CryptoData[] {
-  const map1h = new Map<string, BinanceTicker24hr>();
-  for (const t of tickers1h) {
-    map1h.set(t.symbol, t);
+  const windowMaps = new Map<string, Map<string, BinanceTicker24hr>>();
+  for (const [tf, tickers] of tickersByWindow) {
+    const lookup = new Map<string, BinanceTicker24hr>();
+    for (const t of tickers) {
+      lookup.set(t.symbol, t);
+    }
+    windowMaps.set(tf, lookup);
   }
 
   const processed: CryptoData[] = [];
 
   for (const ticker24h of tickers24h) {
-    const ticker1h = map1h.get(ticker24h.symbol);
-    if (!ticker1h) continue;
+    const priceChangePercentByWindow: Record<string, number> = {};
+    const volatilityByWindow: Record<string, number> = {};
+    let hasWindowedTicker = false;
 
-    const volatilityScore = calculatePositiveVolatility(ticker1h, ticker24h);
+    for (const [tf, lookup] of windowMaps) {
+      const windowedTicker = lookup.get(ticker24h.symbol);
+      if (windowedTicker) {
+        hasWindowedTicker = true;
+        volatilityByWindow[tf] = calculatePositiveVolatility(windowedTicker, ticker24h);
+        priceChangePercentByWindow[tf] = parseFloat(windowedTicker.priceChangePercent) || 0;
+      } else {
+        volatilityByWindow[tf] = 0;
+        priceChangePercentByWindow[tf] = 0;
+      }
+    }
+
+    if (!hasWindowedTicker) continue;
+
+    const volatilityScore = volatilityByWindow[rankingTimeframe] ?? volatilityByWindow['1h'] ?? 0;
     const symbol = ticker24h.symbol;
     const displaySymbol = symbol.endsWith('USDT')
       ? symbol.slice(0, -4)
@@ -70,7 +90,8 @@ export function processAndRankTickers(
       displaySymbol,
       price: parseFloat(ticker24h.lastPrice) || 0,
       priceChangePercent: parseFloat(ticker24h.priceChangePercent) || 0,
-      priceChangePercent1h: parseFloat(ticker1h.priceChangePercent) || 0,
+      priceChangePercentByWindow,
+      volatilityByWindow,
       volatilityScore,
       volume: parseFloat(ticker24h.quoteVolume) || 0,
       highPrice: parseFloat(ticker24h.highPrice) || 0,
