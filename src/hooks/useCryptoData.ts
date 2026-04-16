@@ -1,13 +1,20 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { fetchAll24hrTickers, fetch1hrTickers, fetchSparklineData, fetchFuturesSymbols } from '../api/binance';
 import { processAndRankTickers, preRankBy24h, calculateRSI } from '../utils/volatility';
-import type { CryptoData } from '../types';
+import type { CryptoData, VolatilityColumn, BinanceTicker24hr } from '../types';
 
 export interface CryptoSettings {
-  windowSize: string;   // e.g. '15m', '30m', '1h', '2h', '4h'
-  refreshInterval: number; // seconds
+  columns: VolatilityColumn[];
+  rankingTimeframe: string;
+  refreshInterval: number;
   futuresOnly: boolean;
 }
+
+export const FIXED_COLUMNS: VolatilityColumn[] = [
+  { timeframe: '1h', fixed: true },
+  { timeframe: '30m', fixed: true },
+  { timeframe: '15m', fixed: true },
+];
 
 export interface UseCryptoDataReturn {
   data: CryptoData[];
@@ -18,7 +25,12 @@ export interface UseCryptoDataReturn {
 }
 
 export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
-  const { windowSize, refreshInterval, futuresOnly } = settings;
+  const { columns, rankingTimeframe, refreshInterval, futuresOnly } = settings;
+  const columnsKey = useMemo(() => columns.map((c) => c.timeframe).join(','), [columns]);
+  const timeframes = useMemo(
+    () => Array.from(new Set(columns.map((c) => c.timeframe))),
+    [columnsKey],
+  );
 
   const [data, setData] = useState<CryptoData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,13 +65,15 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       // Step 2: Pre-rank by 24h change to find top candidates
       const candidates = preRankBy24h(filtered24h, 100);
 
-      // Step 3: Fetch rolling-window data for the selected time window
-      const tickersWindow = await fetch1hrTickers(candidates.map((t) => t.symbol), windowSize);
+      const symbols = candidates.map((t) => t.symbol);
+      const perTfResults = await Promise.all(timeframes.map((tf) => fetch1hrTickers(symbols, tf)));
+      const tickersByWindow = new Map<string, BinanceTicker24hr[]>();
+      timeframes.forEach((tf, i) => tickersByWindow.set(tf, perTfResults[i] ?? []));
 
-      // Step 4: Re-rank by window volatility, return top 50
-      const top50 = processAndRankTickers(filtered24h, tickersWindow);
-      const symbols = top50.map((item) => item.symbol);
-      const sparklineMap = await fetchSparklineData(symbols);
+      // Step 3: Re-rank by window volatility, return top 50
+      const top50 = processAndRankTickers(filtered24h, tickersByWindow, rankingTimeframe);
+      const top50Symbols = top50.map((item) => item.symbol);
+      const sparklineMap = await fetchSparklineData(top50Symbols);
 
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];
@@ -79,9 +93,9 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [windowSize, futuresOnly]);
+  }, [columnsKey, rankingTimeframe, futuresOnly]);
 
-  // Initial fetch + auto-refresh; restart whenever windowSize, futuresOnly, or refreshInterval changes
+  // Initial fetch + auto-refresh; restart whenever columns, ranking, futuresOnly, or refreshInterval changes
   useEffect(() => {
     fetchData();
     clearInterval(refreshIntervalTimerRef.current);

@@ -107,3 +107,16 @@ export async function fetchSparklineData(
 
   return result;
 }
+
+export function isValidWindowSize(tf: string): boolean {
+  const match = /^([0-9]+)(m|h|d)$/.exec(tf);
+  if (!match) return false;
+
+  const value = Number(match[1]);
+  const unit = match[2];
+
+  if (unit === 'm') return value >= 1 && value <= 59;
+  if (unit === 'h') return value >= 1 && value <= 23;
+  if (unit === 'd') return value >= 1 && value <= 7;
+  return false;
+}
