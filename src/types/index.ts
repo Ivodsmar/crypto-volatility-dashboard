@@ -55,6 +55,6 @@ export interface CryptoData {
   highPrice: number;
   lowPrice: number;
   openPrice: number;
-  rsi: number | null;
+  stochRsi: { k: number | null; d: number | null };
   sparklineData: number[];
 }

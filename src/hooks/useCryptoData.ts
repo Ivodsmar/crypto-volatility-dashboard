@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { fetchAll24hrTickers, fetch1hrTickers, fetchSparklineData, fetchFuturesSymbols } from '../api/binance';
-import { processAndRankTickers, preRankBy24h, calculateRSI } from '../utils/volatility';
+import { processAndRankTickers, preRankBy24h, calculateStochRSI } from '../utils/volatility';
 import type { CryptoData, VolatilityColumn, BinanceTicker24hr } from '../types';
 
 export interface CryptoSettings {
@@ -8,6 +8,7 @@ export interface CryptoSettings {
   rankingTimeframe: string;
   refreshInterval: number;
   futuresOnly: boolean;
+  klineInterval: string;
 }
 
 export const FIXED_COLUMNS: VolatilityColumn[] = [
@@ -25,7 +26,7 @@ export interface UseCryptoDataReturn {
 }
 
 export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
-  const { columns, rankingTimeframe, refreshInterval, futuresOnly } = settings;
+  const { columns, rankingTimeframe, refreshInterval, futuresOnly, klineInterval } = settings;
   const columnsKey = useMemo(() => columns.map((c) => c.timeframe).join(','), [columns]);
   const timeframes = useMemo(
     () => Array.from(new Set(columns.map((c) => c.timeframe))),
@@ -73,14 +74,14 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       // Step 3: Re-rank by window volatility, return top 50
       const top50 = processAndRankTickers(filtered24h, tickersByWindow, rankingTimeframe);
       const top50Symbols = top50.map((item) => item.symbol);
-      const sparklineMap = await fetchSparklineData(top50Symbols);
+      const sparklineMap = await fetchSparklineData(top50Symbols, settings.klineInterval, 100);
 
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];
         return {
           ...item,
           sparklineData: prices,
-          rsi: prices.length > 0 ? calculateRSI(prices) : null,
+          stochRsi: prices.length > 0 ? calculateStochRSI(prices) : { k: null, d: null },
         };
       });
 
@@ -93,7 +94,7 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [columnsKey, rankingTimeframe, futuresOnly]);
+  }, [columnsKey, rankingTimeframe, futuresOnly, klineInterval]);
 
   // Initial fetch + auto-refresh; restart whenever columns, ranking, futuresOnly, or refreshInterval changes
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import React, { FC } from 'react';
 import type { CryptoSettings } from '../hooks/useCryptoData';
 
 interface SettingsBarProps {
@@ -12,6 +12,13 @@ const REFRESH_OPTIONS = [
   { value: 120, label: '2m'  },
   { value: 300, label: '5m'  },
   { value: 600, label: '10m' },
+];
+
+const CANDLE_OPTIONS = [
+  { value: '1m',  label: '1m'  },
+  { value: '3m',  label: '3m'  },
+  { value: '5m',  label: '5m'  },
+  { value: '15m', label: '15m' },
 ];
 
 const PillGroup: FC<{
@@ -45,6 +52,16 @@ const PillGroup: FC<{
 
 const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings }) => {
   const rankingOptions = settings.columns.map((c) => ({ value: c.timeframe, label: c.timeframe }));
+  const [customCandles, setCustomCandles] = React.useState('');
+
+  const handleCustomCandles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setCustomCandles(val);
+    const num = parseInt(val, 10);
+    if (Number.isInteger(num) && num > 0) {
+      onChange({ ...settings, klineInterval: `${num}m` });
+    }
+  };
 
   return (
     <div className="border-b border-[#2b3139] bg-[#0b0e11]/60 px-6 py-2">
@@ -60,6 +77,21 @@ const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings 
           options={REFRESH_OPTIONS}
           active={settings.refreshInterval}
           onSelect={(v) => onChange({ ...settings, refreshInterval: v as number })}
+        />
+        <PillGroup
+          label="Candles"
+          options={CANDLE_OPTIONS}
+          active={settings.klineInterval}
+          onSelect={(v) => onChange({ ...settings, klineInterval: v as string })}
+        />
+        <input
+          type="number"
+          min={1}
+          value={customCandles}
+          onChange={handleCustomCandles}
+          placeholder="custom"
+          className="bg-[#0b0e11] border border-[#2b3139] rounded px-2 py-1 text-xs text-white font-mono"
+          style={{ width: '50px' }}
         />
         <div className="flex items-center gap-2">
           <span className="text-[11px] uppercase tracking-wider text-[#848e9c] font-medium">Futures Only</span>

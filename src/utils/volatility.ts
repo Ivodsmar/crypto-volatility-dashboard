@@ -97,7 +97,7 @@ export function processAndRankTickers(
       highPrice: parseFloat(ticker24h.highPrice) || 0,
       lowPrice: parseFloat(ticker24h.lowPrice) || 0,
       openPrice: parseFloat(ticker24h.openPrice) || 0,
-      rsi: null,
+      stochRsi: { k: null, d: null },
       sparklineData: [],
     });
   }
@@ -107,33 +107,66 @@ export function processAndRankTickers(
   return processed.slice(0, 50);
 }
 
-export function calculateRSI(closePrices: number[], period = 14): number | null {
-  if (closePrices.length < period + 1) return null;
+export function calculateStochRSI(
+  closePrices: number[],
+  rsiLength = 14,
+  stochLength = 14,
+  kSmooth = 3,
+  dSmooth = 3,
+): { k: number | null; d: number | null } {
+  if (closePrices.length < rsiLength + stochLength + kSmooth + dSmooth) {
+    return { k: null, d: null };
+  }
 
+  // Step 1: Compute full RSI series (Wilder's smoothing)
+  const rsiValues: number[] = [];
   let avgGain = 0;
   let avgLoss = 0;
-
-  // Initial average over first `period` changes
-  for (let i = 1; i <= period; i++) {
+  for (let i = 1; i <= rsiLength; i++) {
     const change = closePrices[i]! - closePrices[i - 1]!;
     if (change > 0) avgGain += change;
     else avgLoss += Math.abs(change);
   }
-  avgGain /= period;
-  avgLoss /= period;
+  avgGain /= rsiLength;
+  avgLoss /= rsiLength;
+  rsiValues.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
 
-  // Smoothed RSI (Wilder's method) for remaining data
-  for (let i = period + 1; i < closePrices.length; i++) {
+  for (let i = rsiLength + 1; i < closePrices.length; i++) {
     const change = closePrices[i]! - closePrices[i - 1]!;
     const gain = change > 0 ? change : 0;
     const loss = change < 0 ? Math.abs(change) : 0;
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    avgGain = (avgGain * (rsiLength - 1) + gain) / rsiLength;
+    avgLoss = (avgLoss * (rsiLength - 1) + loss) / rsiLength;
+    rsiValues.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
   }
 
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
+  // Step 2: Stochastic of RSI
+  const validRawK: number[] = [];
+  for (let i = stochLength - 1; i < rsiValues.length; i++) {
+    const slice = rsiValues.slice(i - stochLength + 1, i + 1);
+    const mn = Math.min(...slice);
+    const mx = Math.max(...slice);
+    validRawK.push((mx - mn) === 0 ? 0 : (rsiValues[i]! - mn) / (mx - mn) * 100);
+  }
+
+  // Step 3: SMA(kSmooth) over validRawK
+  const smoothKSeries: number[] = [];
+  for (let i = kSmooth - 1; i < validRawK.length; i++) {
+    const slice = validRawK.slice(i - kSmooth + 1, i + 1);
+    smoothKSeries.push(slice.reduce((a, b) => a + b, 0) / kSmooth);
+  }
+
+  // Step 4: SMA(dSmooth) over smoothKSeries
+  const smoothDSeries: number[] = [];
+  for (let i = dSmooth - 1; i < smoothKSeries.length; i++) {
+    const slice = smoothKSeries.slice(i - dSmooth + 1, i + 1);
+    smoothDSeries.push(slice.reduce((a, b) => a + b, 0) / dSmooth);
+  }
+
+  return {
+    k: smoothKSeries.length > 0 ? smoothKSeries[smoothKSeries.length - 1]! : null,
+    d: smoothDSeries.length > 0 ? smoothDSeries[smoothDSeries.length - 1]! : null,
+  };
 }
 
 export function formatPrice(price: number): string {

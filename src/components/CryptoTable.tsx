@@ -69,7 +69,7 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
               Volatility
             </th>
             <th className="px-3 py-2.5 text-center text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
-              RSI (14)
+              StochRSI
             </th>
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Volume (24h)
@@ -150,20 +150,25 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      {coin.rsi !== null ? (
-                        <span
-                          className={`font-mono text-xs px-1.5 py-0.5 rounded ${
-                            coin.rsi >= 70
-                              ? 'text-[#f6465d] bg-[#f6465d]/10'
-                              : coin.rsi <= 30
-                                ? 'text-[#0ecb81] bg-[#0ecb81]/10'
-                                : 'text-[#b7bdc6]'
-                          }`}
-                        >
-                          {coin.rsi.toFixed(1)}
-                        </span>
-                      ) : (
+                      {coin.stochRsi.k === null && coin.stochRsi.d === null ? (
                         <span className="text-[#474d57] text-xs">—</span>
+                      ) : (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span
+                            className={`font-mono text-xs ${
+                              coin.stochRsi.k !== null && coin.stochRsi.k >= 80
+                                ? 'text-[#f6465d]'
+                                : coin.stochRsi.k !== null && coin.stochRsi.k <= 20
+                                  ? 'text-[#0ecb81]'
+                                  : 'text-[#b7bdc6]'
+                            }`}
+                          >
+                            {coin.stochRsi.k !== null ? coin.stochRsi.k.toFixed(1) : '—'}
+                          </span>
+                          <span className="font-mono text-[10px] text-[#474d57]">
+                            {coin.stochRsi.d !== null ? coin.stochRsi.d.toFixed(1) : '—'}
+                          </span>
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-[#b7bdc6]">

@@ -16,6 +16,7 @@ function loadInitialSettings(): CryptoSettings {
   let rankingTimeframe = '1h';
   let refreshInterval = 300;
   let futuresOnly = false;
+  let klineInterval = '15m';
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -27,6 +28,7 @@ function loadInitialSettings(): CryptoSettings {
           rankingTimeframe?: unknown;
           refreshInterval?: unknown;
           futuresOnly?: unknown;
+          klineInterval?: unknown;
         };
 
         if (Array.isArray(saved.customColumns)) {
@@ -40,6 +42,7 @@ function loadInitialSettings(): CryptoSettings {
         if (typeof saved.rankingTimeframe === 'string') rankingTimeframe = saved.rankingTimeframe;
         if (typeof saved.refreshInterval === 'number') refreshInterval = saved.refreshInterval;
         if (typeof saved.futuresOnly === 'boolean') futuresOnly = saved.futuresOnly;
+        if (typeof saved.klineInterval === 'string' && /^\d+m$/.test(saved.klineInterval)) klineInterval = saved.klineInterval;
       }
     }
   } catch {
@@ -51,7 +54,7 @@ function loadInitialSettings(): CryptoSettings {
     ...customColumns.map((tf) => ({ timeframe: tf, fixed: false })),
   ];
 
-  return { columns, rankingTimeframe, refreshInterval, futuresOnly };
+  return { columns, rankingTimeframe, refreshInterval, futuresOnly, klineInterval };
 }
 
 function App(): React.ReactElement {
@@ -66,6 +69,7 @@ function App(): React.ReactElement {
         rankingTimeframe: settings.rankingTimeframe,
         refreshInterval: settings.refreshInterval,
         futuresOnly: settings.futuresOnly,
+        klineInterval: settings.klineInterval,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {

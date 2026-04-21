@@ -82,6 +82,8 @@ export async function fetchKlines(
 
 export async function fetchSparklineData(
   symbols: string[],
+  interval = '15m',
+  limit = 100,
 ): Promise<Map<string, number[]>> {
   const result = new Map<string, number[]>();
 
@@ -89,7 +91,7 @@ export async function fetchSparklineData(
     const batch = symbols.slice(i, i + BATCH_SIZE);
 
     const settled = await Promise.allSettled(
-      batch.map((symbol) => fetchKlines(symbol, '1h', 30)),
+      batch.map((symbol) => fetchKlines(symbol, interval, limit)),
     );
 
     batch.forEach((symbol, index) => {
