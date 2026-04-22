@@ -15,6 +15,8 @@ export const FIXED_COLUMNS: VolatilityColumn[] = [
   { timeframe: '1h', fixed: true },
   { timeframe: '30m', fixed: true },
   { timeframe: '15m', fixed: true },
+  { timeframe: '3m', fixed: true },
+  { timeframe: '1m', fixed: true },
 ];
 
 export interface UseCryptoDataReturn {
