@@ -15,7 +15,7 @@ function loadInitialSettings(): CryptoSettings {
   let customColumns: string[] = [];
   let rankingTimeframe = '1h';
   let refreshInterval = 300;
-  let futuresOnly = false;
+  let futuresOnly = true;
   let klineInterval = '15m';
 
   try {
