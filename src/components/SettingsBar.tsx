@@ -1,4 +1,4 @@
-import React, { FC } from 'react';
+import { FC } from 'react';
 import type { CryptoSettings } from '../hooks/useCryptoData';
 
 interface SettingsBarProps {
