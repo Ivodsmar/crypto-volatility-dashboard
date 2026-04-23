@@ -9,7 +9,7 @@ import SettingsPanel from './components/SettingsPanel';
 import type { VolatilityColumn } from './types';
 import { isValidWindowSize } from './api/binance';
 
-const STORAGE_KEY = 'crypto-volatility-dashboard/settings/v1';
+const STORAGE_KEY = 'crypto-volatility-dashboard/settings/v2';
 
 function loadInitialSettings(): CryptoSettings {
   let customColumns: string[] = [];
@@ -89,6 +89,7 @@ function App(): React.ReactElement {
         settings={settings}
         onChange={setSettings}
         onOpenSettings={() => setSettingsOpen(true)}
+        isLoading={isLoading}
       />
       <main className="max-w-[1400px] mx-auto px-4 py-4">
         {error && (

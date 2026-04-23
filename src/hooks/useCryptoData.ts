@@ -32,7 +32,7 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
   const columnsKey = useMemo(() => columns.map((c) => c.timeframe).join(','), [columns]);
   const timeframes = useMemo(
     () => Array.from(new Set(columns.map((c) => c.timeframe))),
-    [columnsKey],
+    [columns],
   );
 
   const [data, setData] = useState<CryptoData[]>([]);
@@ -42,6 +42,7 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(refreshInterval);
 
   const futuresSymbolsRef = useRef<Set<string> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const refreshIntervalRef = useRef(refreshInterval);
   const refreshIntervalTimerRef = useRef<ReturnType<typeof setInterval>>();
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval>>();
@@ -52,32 +53,30 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
   }, [refreshInterval]);
 
   const fetchData = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsLoading(true);
     try {
-      // Fetch futures symbols once and cache for session
       if (futuresOnly && !futuresSymbolsRef.current) {
         futuresSymbolsRef.current = await fetchFuturesSymbols();
       }
-
-      // Step 1: Fetch 24h tickers, optionally filter to futures
+      if (controller.signal.aborted) return;
       const tickers24h = await fetchAll24hrTickers();
+      if (controller.signal.aborted) return;
       const filtered24h = futuresOnly && futuresSymbolsRef.current
         ? tickers24h.filter((t) => futuresSymbolsRef.current!.has(t.symbol))
         : tickers24h;
-
-      // Step 2: Pre-rank by 24h change to find top candidates
       const candidates = preRankBy24h(filtered24h, 100);
-
       const symbols = candidates.map((t) => t.symbol);
       const perTfResults = await Promise.all(timeframes.map((tf) => fetch1hrTickers(symbols, tf)));
+      if (controller.signal.aborted) return;
       const tickersByWindow = new Map<string, BinanceTicker24hr[]>();
       timeframes.forEach((tf, i) => tickersByWindow.set(tf, perTfResults[i] ?? []));
-
-      // Step 3: Re-rank by window volatility, return top 50
       const top50 = processAndRankTickers(filtered24h, tickersByWindow, rankingTimeframe);
       const top50Symbols = top50.map((item) => item.symbol);
-      const sparklineMap = await fetchSparklineData(top50Symbols, settings.klineInterval, 100);
-
+      const sparklineMap = await fetchSparklineData(top50Symbols, klineInterval, 100);
+      if (controller.signal.aborted) return;
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];
         return {
@@ -92,9 +91,12 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       setError(null);
       setSecondsUntilRefresh(refreshIntervalRef.current);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch crypto data');
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [columnsKey, rankingTimeframe, futuresOnly, klineInterval]);
 
@@ -103,7 +105,10 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
     fetchData();
     clearInterval(refreshIntervalTimerRef.current);
     refreshIntervalTimerRef.current = setInterval(fetchData, refreshInterval * 1000);
-    return () => clearInterval(refreshIntervalTimerRef.current);
+    return () => {
+      clearInterval(refreshIntervalTimerRef.current);
+      abortControllerRef.current?.abort();
+    };
   }, [fetchData, refreshInterval]);
 
   // Countdown timer; resets whenever the interval or fetch cycle changes
@@ -114,7 +119,7 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       setSecondsUntilRefresh((prev) => (prev <= 1 ? refreshIntervalRef.current : prev - 1));
     }, 1000);
     return () => clearInterval(countdownIntervalRef.current);
-  }, [fetchData, refreshInterval]);
+  }, [refreshInterval]);
 
   return { data, isLoading, error, lastUpdated, secondsUntilRefresh };
 }

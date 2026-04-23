@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import React, { FC } from 'react';
 import { Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
 
 interface SparklineChartProps {
@@ -56,4 +56,6 @@ const SparklineChart: FC<SparklineChartProps> = ({
   );
 };
 
-export default SparklineChart;
+export default React.memo(SparklineChart, (prev, next) =>
+  prev.data === next.data && prev.isPositive === next.isPositive
+);

@@ -5,6 +5,7 @@ interface SettingsBarProps {
   settings: CryptoSettings;
   onChange: (next: CryptoSettings) => void;
   onOpenSettings: () => void;
+  isLoading: boolean;
 }
 
 const REFRESH_OPTIONS = [
@@ -44,7 +45,7 @@ const PillGroup: FC<{
   </div>
 );
 
-const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings }) => {
+const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings, isLoading }) => {
   const rankingOptions = settings.columns.map((c) => ({ value: c.timeframe, label: c.timeframe }));
 
   return (
@@ -54,7 +55,7 @@ const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings 
           label="Ranking"
           options={rankingOptions}
           active={settings.rankingTimeframe}
-          onSelect={(v) => onChange({ ...settings, rankingTimeframe: v as string })}
+          onSelect={(v) => !isLoading && onChange({ ...settings, rankingTimeframe: v as string })}
         />
         <PillGroup
           label="Refresh"
@@ -65,7 +66,7 @@ const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings 
         <div className="flex items-center gap-2">
           <span className="text-[11px] uppercase tracking-wider text-[#848e9c] font-medium">Futures Only</span>
           <button
-            onClick={() => onChange({ ...settings, futuresOnly: !settings.futuresOnly })}
+            onClick={() => !isLoading && onChange({ ...settings, futuresOnly: !settings.futuresOnly })}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
               settings.futuresOnly ? 'bg-[#F0B90B]' : 'bg-[#2b3139]'
             }`}

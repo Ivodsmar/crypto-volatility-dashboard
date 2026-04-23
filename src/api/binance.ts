@@ -31,7 +31,12 @@ function delay(ms: number): Promise<void> {
 
 export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
   const response = await fetchWithTimeout(`${BASE_URL}/api/v3/ticker/24hr`);
-  const tickers: BinanceTicker24hr[] = await response.json();
+  let tickers: BinanceTicker24hr[];
+  try {
+    tickers = await response.json() as BinanceTicker24hr[];
+  } catch {
+    throw new Error("Failed to parse ticker response from Binance");
+  }
 
   return tickers.filter(
     (t) => t.symbol.endsWith('USDT') && !isLeveragedToken(t.symbol),
@@ -40,7 +45,12 @@ export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
 
 export async function fetchFuturesSymbols(): Promise<Set<string>> {
   const response = await fetchWithTimeout('https://fapi.binance.com/fapi/v1/exchangeInfo');
-  const data: { symbols: { symbol: string; status: string }[] } = await response.json();
+  let data: { symbols: { symbol: string; status: string }[] };
+  try {
+    data = await response.json() as { symbols: { symbol: string; status: string }[] };
+  } catch {
+    throw new Error("Failed to parse futures symbols response from Binance");
+  }
   return new Set(
     data.symbols
       .filter((s) => s.status === 'TRADING' && s.symbol.endsWith('USDT'))
@@ -58,7 +68,12 @@ export async function fetch1hrTickers(symbols: string[], windowSize = '1h'): Pro
     const response = await fetchWithTimeout(
       `${BASE_URL}/api/v3/ticker?windowSize=${windowSize}&symbols=${symbolsParam}`,
     );
-    const tickers: BinanceTicker24hr[] = await response.json();
+    let tickers: BinanceTicker24hr[];
+    try {
+      tickers = await response.json() as BinanceTicker24hr[];
+    } catch {
+      throw new Error("Failed to parse 1hr ticker response from Binance");
+    }
     result.push(...tickers);
 
     if (i + BATCH_SIZE < symbols.length) {
