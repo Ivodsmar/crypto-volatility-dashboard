@@ -63,7 +63,7 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
               </th>
             ))}
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
-              24h %
+              Today %
             </th>
             <th className="px-3 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Volatility

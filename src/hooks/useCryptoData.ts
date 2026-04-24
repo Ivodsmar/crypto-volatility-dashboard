@@ -4,6 +4,7 @@ import {
   fetch1hrTickers,
   fetchFuturesAllWindowedStats,
   fetchSparklineData,
+  fetchTodayChangeSinceMidnight,
 } from '../api/binance';
 import { processAndRankTickers, preRankBy24h, calculateStochRSI } from '../utils/volatility';
 import type { CryptoData, VolatilityColumn, BinanceTicker24hr } from '../types';
@@ -81,12 +82,24 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       if (controller.signal.aborted) return;
       const top50 = processAndRankTickers(tickers24h, tickersByWindow, rankingTimeframe);
       const top50Symbols = top50.map((item) => item.symbol);
-      const sparklineMap = await fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly);
+
+      // Local-midnight-anchored "Today %" — matches Binance's timezone-locked
+      // 24h column (counts from midnight in the user's local timezone).
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+      const sinceMidnightMs = midnight.getTime();
+
+      const [sparklineMap, todayChangeMap] = await Promise.all([
+        fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly),
+        fetchTodayChangeSinceMidnight(top50Symbols, sinceMidnightMs, futuresOnly),
+      ]);
       if (controller.signal.aborted) return;
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];
+        const todayPct = todayChangeMap.get(item.symbol);
         return {
           ...item,
+          priceChangePercent: todayPct ?? item.priceChangePercent,
           sparklineData: prices,
           stochRsi: prices.length > 0 ? calculateStochRSI(prices) : { k: null, d: null },
         };

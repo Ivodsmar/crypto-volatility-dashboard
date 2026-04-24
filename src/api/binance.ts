@@ -264,6 +264,52 @@ export async function fetchSparklineData(
   return result;
 }
 
+// Fetches % change since `sinceUtcMs` for each symbol using 15m klines.
+// Used for the "Today %" column: user's local midnight as UTC ms -> change from
+// the first kline's open to the last kline's close. Matches Binance's
+// timezone-locked 24h column behavior (counts from midnight in selected tz).
+export async function fetchTodayChangeSinceMidnight(
+  symbols: string[],
+  sinceUtcMs: number,
+  futuresOnly = false,
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  const base = futuresOnly ? FUTURES_BASE : BASE_URL;
+  const path = futuresOnly ? '/fapi/v1/klines' : '/api/v3/klines';
+
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const settled = await Promise.allSettled(
+      batch.map(async (symbol) => {
+        const response = await fetchWithTimeout(
+          `${base}${path}?symbol=${symbol}&interval=15m&startTime=${sinceUtcMs}&limit=100`,
+        );
+        const klines = (await response.json()) as BinanceKline[];
+        return { symbol, klines };
+      }),
+    );
+
+    for (const outcome of settled) {
+      if (outcome.status !== 'fulfilled') continue;
+      const { symbol, klines } = outcome.value;
+      if (klines.length === 0) continue;
+      const first = klines[0];
+      const last = klines[klines.length - 1];
+      if (!first || !last) continue;
+      const open = parseFloat(first[1]);
+      const close = parseFloat(last[4]);
+      if (!(open > 0)) continue;
+      result.set(symbol, ((close - open) / open) * 100);
+    }
+
+    if (i + BATCH_SIZE < symbols.length) {
+      await delay(BATCH_DELAY);
+    }
+  }
+
+  return result;
+}
+
 export function isValidWindowSize(tf: string): boolean {
   const match = /^([0-9]+)(m|h|d)$/.exec(tf);
   if (!match) return false;
