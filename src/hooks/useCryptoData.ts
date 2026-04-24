@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { fetchAll24hrTickers, fetch1hrTickers, fetchSparklineData, fetchFuturesSymbols } from '../api/binance';
+import {
+  fetchAll24hrTickers,
+  fetch1hrTickers,
+  fetchFuturesAllWindowedStats,
+  fetchSparklineData,
+} from '../api/binance';
 import { processAndRankTickers, preRankBy24h, calculateStochRSI } from '../utils/volatility';
 import type { CryptoData, VolatilityColumn, BinanceTicker24hr } from '../types';
 
@@ -41,7 +46,6 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(refreshInterval);
 
-  const futuresSymbolsRef = useRef<Set<string> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const refreshIntervalRef = useRef(refreshInterval);
   const refreshIntervalTimerRef = useRef<ReturnType<typeof setInterval>>();
@@ -58,24 +62,26 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
     abortControllerRef.current = controller;
     setIsLoading(true);
     try {
-      if (futuresOnly && !futuresSymbolsRef.current) {
-        futuresSymbolsRef.current = await fetchFuturesSymbols();
+      const tickers24h = await fetchAll24hrTickers(futuresOnly);
+      if (controller.signal.aborted) return;
+      const candidates = preRankBy24h(tickers24h, 100);
+      const symbols = candidates.map((t) => t.symbol);
+
+      let tickersByWindow: Map<string, BinanceTicker24hr[]>;
+      if (futuresOnly) {
+        // Single 1m-kline fetch per symbol; derive all windows client-side.
+        tickersByWindow = await fetchFuturesAllWindowedStats(symbols, timeframes);
+      } else {
+        const perTfResults = await Promise.all(
+          timeframes.map((tf) => fetch1hrTickers(symbols, tf, false)),
+        );
+        tickersByWindow = new Map<string, BinanceTicker24hr[]>();
+        timeframes.forEach((tf, i) => tickersByWindow.set(tf, perTfResults[i] ?? []));
       }
       if (controller.signal.aborted) return;
-      const tickers24h = await fetchAll24hrTickers();
-      if (controller.signal.aborted) return;
-      const filtered24h = futuresOnly && futuresSymbolsRef.current
-        ? tickers24h.filter((t) => futuresSymbolsRef.current!.has(t.symbol))
-        : tickers24h;
-      const candidates = preRankBy24h(filtered24h, 100);
-      const symbols = candidates.map((t) => t.symbol);
-      const perTfResults = await Promise.all(timeframes.map((tf) => fetch1hrTickers(symbols, tf)));
-      if (controller.signal.aborted) return;
-      const tickersByWindow = new Map<string, BinanceTicker24hr[]>();
-      timeframes.forEach((tf, i) => tickersByWindow.set(tf, perTfResults[i] ?? []));
-      const top50 = processAndRankTickers(filtered24h, tickersByWindow, rankingTimeframe);
+      const top50 = processAndRankTickers(tickers24h, tickersByWindow, rankingTimeframe);
       const top50Symbols = top50.map((item) => item.symbol);
-      const sparklineMap = await fetchSparklineData(top50Symbols, klineInterval, 100);
+      const sparklineMap = await fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly);
       if (controller.signal.aborted) return;
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];

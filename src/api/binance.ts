@@ -1,6 +1,7 @@
 import type { BinanceTicker24hr, BinanceKline } from '../types';
 
 const BASE_URL = 'https://api.binance.com';
+const FUTURES_BASE = 'https://fapi.binance.com';
 const FETCH_TIMEOUT = 10000;
 const BATCH_SIZE = 10;
 const BATCH_DELAY = 200;
@@ -29,52 +30,108 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
-  const response = await fetchWithTimeout(`${BASE_URL}/api/v3/ticker/24hr`);
+export async function fetchAll24hrTickers(futuresOnly: boolean): Promise<BinanceTicker24hr[]> {
+  const url = futuresOnly
+    ? `${FUTURES_BASE}/fapi/v1/ticker/24hr`
+    : `${BASE_URL}/api/v3/ticker/24hr`;
+  const response = await fetchWithTimeout(url);
   let tickers: BinanceTicker24hr[];
   try {
-    tickers = await response.json() as BinanceTicker24hr[];
+    tickers = (await response.json()) as BinanceTicker24hr[];
   } catch {
-    throw new Error("Failed to parse ticker response from Binance");
+    throw new Error('Failed to parse 24hr ticker response from Binance');
   }
 
   return tickers.filter(
-    (t) => t.symbol.endsWith('USDT') && !isLeveragedToken(t.symbol),
+    (t) => t.symbol.endsWith('USDT') && !t.symbol.includes('_') && !isLeveragedToken(t.symbol),
   );
 }
 
-export async function fetchFuturesSymbols(): Promise<Set<string>> {
-  const response = await fetchWithTimeout('https://fapi.binance.com/fapi/v1/exchangeInfo');
-  let data: { symbols: { symbol: string; status: string }[] };
-  try {
-    data = await response.json() as { symbols: { symbol: string; status: string }[] };
-  } catch {
-    throw new Error("Failed to parse futures symbols response from Binance");
+function windowToMinutes(windowSize: string): number {
+  const match = /^([0-9]+)(m|h|d)$/.exec(windowSize);
+  if (!match) throw new Error(`Invalid windowSize: ${windowSize}`);
+  const n = Number(match[1]);
+  const unit = match[2];
+  if (unit === 'h') return n * 60;
+  if (unit === 'd') return n * 1440;
+  return n;
+}
+
+function computeStatsFromKlines(symbol: string, klines: BinanceKline[]): BinanceTicker24hr | null {
+  if (klines.length === 0) return null;
+  const firstKline = klines[0];
+  const lastKline = klines[klines.length - 1];
+  if (!firstKline || !lastKline) return null;
+
+  const openPrice = parseFloat(firstKline[1]);
+  const closePrice = parseFloat(lastKline[4]);
+  let highPrice = -Infinity;
+  let lowPrice = Infinity;
+  let volume = 0;
+  let quoteVolume = 0;
+  for (const k of klines) {
+    const h = parseFloat(k[2]);
+    const l = parseFloat(k[3]);
+    const v = parseFloat(k[5]);
+    const qv = parseFloat(k[7]);
+    if (h > highPrice) highPrice = h;
+    if (l < lowPrice) lowPrice = l;
+    volume += v;
+    quoteVolume += qv;
   }
-  return new Set(
-    data.symbols
-      .filter((s) => s.status === 'TRADING' && s.symbol.endsWith('USDT'))
-      .map((s) => s.symbol),
-  );
+  const priceChange = closePrice - openPrice;
+  const priceChangePercent = openPrice > 0 ? (priceChange / openPrice) * 100 : 0;
+
+  return {
+    symbol,
+    priceChange: priceChange.toString(),
+    priceChangePercent: priceChangePercent.toString(),
+    weightedAvgPrice: '0',
+    prevClosePrice: openPrice.toString(),
+    lastPrice: closePrice.toString(),
+    lastQty: '0',
+    bidPrice: '0',
+    bidQty: '0',
+    askPrice: '0',
+    askQty: '0',
+    openPrice: openPrice.toString(),
+    highPrice: highPrice.toString(),
+    lowPrice: lowPrice.toString(),
+    volume: volume.toString(),
+    quoteVolume: quoteVolume.toString(),
+    openTime: firstKline[0] as number,
+    closeTime: lastKline[6] as number,
+    firstId: 0,
+    lastId: 0,
+    count: 0,
+  } as unknown as BinanceTicker24hr;
 }
 
-export async function fetch1hrTickers(symbols: string[], windowSize = '1h'): Promise<BinanceTicker24hr[]> {
+async function fetchFuturesWindowedStats(
+  symbols: string[],
+  windowSize: string,
+): Promise<BinanceTicker24hr[]> {
+  const minutes = windowToMinutes(windowSize);
+  const limit = Math.min(Math.max(minutes, 1), 1500);
   const result: BinanceTicker24hr[] = [];
 
-  // Binance /api/v3/ticker?windowSize=Xh requires a symbols param, max ~100 per call
   for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
     const batch = symbols.slice(i, i + BATCH_SIZE);
-    const symbolsParam = encodeURIComponent(JSON.stringify(batch));
-    const response = await fetchWithTimeout(
-      `${BASE_URL}/api/v3/ticker?windowSize=${windowSize}&symbols=${symbolsParam}`,
+    const settled = await Promise.allSettled(
+      batch.map(async (symbol) => {
+        const response = await fetchWithTimeout(
+          `${FUTURES_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${limit}`,
+        );
+        const klines = (await response.json()) as BinanceKline[];
+        return { symbol, klines };
+      }),
     );
-    let tickers: BinanceTicker24hr[];
-    try {
-      tickers = await response.json() as BinanceTicker24hr[];
-    } catch {
-      throw new Error("Failed to parse 1hr ticker response from Binance");
+
+    for (const outcome of settled) {
+      if (outcome.status !== 'fulfilled') continue;
+      const ticker = computeStatsFromKlines(outcome.value.symbol, outcome.value.klines);
+      if (ticker) result.push(ticker);
     }
-    result.push(...tickers);
 
     if (i + BATCH_SIZE < symbols.length) {
       await delay(BATCH_DELAY);
@@ -84,13 +141,94 @@ export async function fetch1hrTickers(symbols: string[], windowSize = '1h'): Pro
   return result;
 }
 
+// Fetches 1m klines ONCE per symbol for the largest requested window, then derives
+// per-window stats from the cached klines. Reduces futures requests from N*symbols
+// to 1*symbols per refresh cycle.
+export async function fetchFuturesAllWindowedStats(
+  symbols: string[],
+  windowSizes: string[],
+): Promise<Map<string, BinanceTicker24hr[]>> {
+  const result = new Map<string, BinanceTicker24hr[]>();
+  if (windowSizes.length === 0) return result;
+
+  const windowMinutes = windowSizes.map((w) => ({ w, m: windowToMinutes(w) }));
+  const maxMinutes = Math.max(...windowMinutes.map((x) => x.m));
+  const limit = Math.min(Math.max(maxMinutes, 1), 1500);
+
+  for (const { w } of windowMinutes) result.set(w, []);
+
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const settled = await Promise.allSettled(
+      batch.map(async (symbol) => {
+        const response = await fetchWithTimeout(
+          `${FUTURES_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${limit}`,
+        );
+        const klines = (await response.json()) as BinanceKline[];
+        return { symbol, klines };
+      }),
+    );
+
+    for (const outcome of settled) {
+      if (outcome.status !== 'fulfilled') continue;
+      const { symbol, klines } = outcome.value;
+      if (klines.length === 0) continue;
+
+      for (const { w, m } of windowMinutes) {
+        const sliced = klines.length > m ? klines.slice(-m) : klines;
+        const ticker = computeStatsFromKlines(symbol, sliced);
+        if (ticker) result.get(w)!.push(ticker);
+      }
+    }
+
+    if (i + BATCH_SIZE < symbols.length) {
+      await delay(BATCH_DELAY);
+    }
+  }
+
+  return result;
+}
+
+export async function fetch1hrTickers(
+  symbols: string[],
+  windowSize = '1h',
+  futuresOnly = false,
+): Promise<BinanceTicker24hr[]> {
+  if (futuresOnly) {
+    return fetchFuturesWindowedStats(symbols, windowSize);
+  }
+  const result: BinanceTicker24hr[] = [];
+
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const symbolsParam = encodeURIComponent(JSON.stringify(batch));
+    const response = await fetchWithTimeout(
+      `${BASE_URL}/api/v3/ticker?windowSize=${windowSize}&symbols=${symbolsParam}`,
+    );
+    let tickers: BinanceTicker24hr[];
+    try {
+      tickers = (await response.json()) as BinanceTicker24hr[];
+    } catch {
+      throw new Error('Failed to parse windowed ticker response from Binance');
+    }
+    result.push(...tickers);
+    if (i + BATCH_SIZE < symbols.length) {
+      await delay(BATCH_DELAY);
+    }
+  }
+  return result;
+}
+
 export async function fetchKlines(
   symbol: string,
   interval = '1h',
   limit = 24,
+  futuresOnly = false,
 ): Promise<BinanceKline[]> {
+  const base = futuresOnly ? FUTURES_BASE : BASE_URL;
+  const path = futuresOnly ? '/fapi/v1/klines' : '/api/v3/klines';
   const response = await fetchWithTimeout(
-    `${BASE_URL}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+    `${base}${path}?symbol=${symbol}&interval=${interval}&limit=${limit}`,
   );
   return response.json();
 }
@@ -99,6 +237,7 @@ export async function fetchSparklineData(
   symbols: string[],
   interval = '15m',
   limit = 100,
+  futuresOnly = false,
 ): Promise<Map<string, number[]>> {
   const result = new Map<string, number[]>();
 
@@ -106,7 +245,7 @@ export async function fetchSparklineData(
     const batch = symbols.slice(i, i + BATCH_SIZE);
 
     const settled = await Promise.allSettled(
-      batch.map((symbol) => fetchKlines(symbol, interval, limit)),
+      batch.map((symbol) => fetchKlines(symbol, interval, limit, futuresOnly)),
     );
 
     batch.forEach((symbol, index) => {
