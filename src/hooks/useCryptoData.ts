@@ -6,6 +6,7 @@ import {
   fetchSparklineData,
   fetchTodayChangeSinceMidnight,
   fetchKlinesByTimeframes,
+  windowToMinutes,
 } from '../api/binance';
 import { processAndRankTickers, preRankBy24h, calculateStochRSI } from '../utils/volatility';
 
@@ -53,6 +54,14 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
   const refreshIntervalTimerRef = useRef<ReturnType<typeof setInterval>>();
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
+  // StochRSI cache: only re-fetch a timeframe when a new bar has closed.
+  // Keyed by futuresOnly so toggling the market type forces a full refresh.
+  const stochRsiCacheRef = useRef<{
+    computed: Map<string, Record<string, { k: number | null; d: number | null }>>;
+    lastFetchedAtByTf: Record<string, number>;
+    futuresOnly: boolean | null;
+  }>({ computed: new Map(), lastFetchedAtByTf: {}, futuresOnly: null });
+
   // Keep refreshInterval ref in sync so fetchData can read it without being in deps
   useEffect(() => {
     refreshIntervalRef.current = refreshInterval;
@@ -90,21 +99,59 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       midnight.setHours(0, 0, 0, 0);
       const sinceMidnightMs = midnight.getTime();
 
-      const [sparklineMap, todayChangeMap, stochRsiKlinesMap] = await Promise.all([
+      const cache = stochRsiCacheRef.current;
+      const now = Date.now();
+
+      // Invalidate entire cache if futuresOnly mode changed
+      if (cache.futuresOnly !== futuresOnly) {
+        cache.computed.clear();
+        cache.lastFetchedAtByTf = {};
+        cache.futuresOnly = futuresOnly;
+      }
+
+      // A timeframe is stale when a new bar has closed since we last fetched it.
+      // e.g. for 1h: floor(now / 3600000) !== floor(lastFetch / 3600000)
+      const staleTfs = timeframes.filter((tf) => {
+        const periodMs = windowToMinutes(tf) * 60_000;
+        const last = cache.lastFetchedAtByTf[tf] ?? 0;
+        return Math.floor(now / periodMs) !== Math.floor(last / periodMs);
+      });
+
+      // New symbols that entered the top50 since last cache fill
+      const newSymbols = top50Symbols.filter((s) => !cache.computed.has(s));
+
+      // Fetch only what's needed
+      const tfsToFetch = newSymbols.length > 0 ? timeframes : staleTfs;
+
+      const [sparklineMap, todayChangeMap] = await Promise.all([
         fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly),
         fetchTodayChangeSinceMidnight(top50Symbols, sinceMidnightMs, futuresOnly),
-        fetchKlinesByTimeframes(top50Symbols, timeframes, 100, futuresOnly),
       ]);
+
+      if (tfsToFetch.length > 0) {
+        const klinesMap = await fetchKlinesByTimeframes(top50Symbols, tfsToFetch, 200, futuresOnly);
+        if (controller.signal.aborted) return;
+
+        for (const symbol of top50Symbols) {
+          const existing = cache.computed.get(symbol) ?? {};
+          const tfKlines = klinesMap.get(symbol) ?? {};
+          const updated = { ...existing };
+          for (const tf of tfsToFetch) {
+            const closes = tfKlines[tf] ?? [];
+            updated[tf] = closes.length > 0 ? calculateStochRSI(closes) : { k: null, d: null };
+          }
+          cache.computed.set(symbol, updated);
+        }
+        for (const tf of tfsToFetch) {
+          cache.lastFetchedAtByTf[tf] = now;
+        }
+      }
+
       if (controller.signal.aborted) return;
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];
         const todayPct = todayChangeMap.get(item.symbol);
-        const tfKlines = stochRsiKlinesMap.get(item.symbol) ?? {};
-        const stochRsiByWindow: Record<string, { k: number | null; d: number | null }> = {};
-        for (const tf of timeframes) {
-          const closes = tfKlines[tf] ?? [];
-          stochRsiByWindow[tf] = closes.length > 0 ? calculateStochRSI(closes) : { k: null, d: null };
-        }
+        const stochRsiByWindow = cache.computed.get(item.symbol) ?? {};
         return {
           ...item,
           priceChangePercent: todayPct ?? item.priceChangePercent,

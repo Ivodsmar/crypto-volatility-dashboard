@@ -47,7 +47,7 @@ export async function fetchAll24hrTickers(futuresOnly: boolean): Promise<Binance
   );
 }
 
-function windowToMinutes(windowSize: string): number {
+export function windowToMinutes(windowSize: string): number {
   const match = /^([0-9]+)(m|h|d)$/.exec(windowSize);
   if (!match) throw new Error(`Invalid windowSize: ${windowSize}`);
   const n = Number(match[1]);
