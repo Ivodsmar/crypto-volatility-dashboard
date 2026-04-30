@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   fetchAll24hrTickers,
-  fetch1hrTickers,
   fetchFuturesAllWindowedStats,
   fetchSparklineData,
   fetchTodayChangeSinceMidnight,
@@ -10,13 +9,12 @@ import {
 } from '../api/binance';
 import { processAndRankTickers, preRankBy24h, calculateStochRSI } from '../utils/volatility';
 
-import type { CryptoData, VolatilityColumn, BinanceTicker24hr } from '../types';
+import type { CryptoData, VolatilityColumn } from '../types';
 
 export interface CryptoSettings {
   columns: VolatilityColumn[];
   rankingTimeframe: string;
   refreshInterval: number;
-  futuresOnly: boolean;
   klineInterval: string;
 }
 
@@ -36,7 +34,7 @@ export interface UseCryptoDataReturn {
 }
 
 export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
-  const { columns, rankingTimeframe, refreshInterval, futuresOnly, klineInterval } = settings;
+  const { columns, rankingTimeframe, refreshInterval, klineInterval } = settings;
   const columnsKey = useMemo(() => columns.map((c) => c.timeframe).join(','), [columns]);
   const timeframes = useMemo(
     () => Array.from(new Set(columns.map((c) => c.timeframe))),
@@ -55,12 +53,10 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
   // StochRSI cache: only re-fetch a timeframe when a new bar has closed.
-  // Keyed by futuresOnly so toggling the market type forces a full refresh.
   const stochRsiCacheRef = useRef<{
     computed: Map<string, Record<string, { k: number | null; d: number | null }>>;
     lastFetchedAtByTf: Record<string, number>;
-    futuresOnly: boolean | null;
-  }>({ computed: new Map(), lastFetchedAtByTf: {}, futuresOnly: null });
+  }>({ computed: new Map(), lastFetchedAtByTf: {} });
 
   // Keep refreshInterval ref in sync so fetchData can read it without being in deps
   useEffect(() => {
@@ -73,22 +69,12 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
     abortControllerRef.current = controller;
     setIsLoading(true);
     try {
-      const tickers24h = await fetchAll24hrTickers(futuresOnly);
+      const tickers24h = await fetchAll24hrTickers();
       if (controller.signal.aborted) return;
       const candidates = preRankBy24h(tickers24h, 100);
       const symbols = candidates.map((t) => t.symbol);
 
-      let tickersByWindow: Map<string, BinanceTicker24hr[]>;
-      if (futuresOnly) {
-        // Single 1m-kline fetch per symbol; derive all windows client-side.
-        tickersByWindow = await fetchFuturesAllWindowedStats(symbols, timeframes);
-      } else {
-        const perTfResults = await Promise.all(
-          timeframes.map((tf) => fetch1hrTickers(symbols, tf, false)),
-        );
-        tickersByWindow = new Map<string, BinanceTicker24hr[]>();
-        timeframes.forEach((tf, i) => tickersByWindow.set(tf, perTfResults[i] ?? []));
-      }
+      const tickersByWindow = await fetchFuturesAllWindowedStats(symbols, timeframes);
       if (controller.signal.aborted) return;
       const top50 = processAndRankTickers(tickers24h, tickersByWindow, rankingTimeframe);
       const top50Symbols = top50.map((item) => item.symbol);
@@ -101,13 +87,6 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
 
       const cache = stochRsiCacheRef.current;
       const now = Date.now();
-
-      // Invalidate entire cache if futuresOnly mode changed
-      if (cache.futuresOnly !== futuresOnly) {
-        cache.computed.clear();
-        cache.lastFetchedAtByTf = {};
-        cache.futuresOnly = futuresOnly;
-      }
 
       // A timeframe is stale when a new bar has closed since we last fetched it.
       // e.g. for 1h: floor(now / 3600000) !== floor(lastFetch / 3600000)
@@ -124,12 +103,12 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       const tfsToFetch = newSymbols.length > 0 ? timeframes : staleTfs;
 
       const [sparklineMap, todayChangeMap] = await Promise.all([
-        fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly),
-        fetchTodayChangeSinceMidnight(top50Symbols, sinceMidnightMs, futuresOnly),
+        fetchSparklineData(top50Symbols, klineInterval, 100),
+        fetchTodayChangeSinceMidnight(top50Symbols, sinceMidnightMs),
       ]);
 
       if (tfsToFetch.length > 0) {
-        const klinesMap = await fetchKlinesByTimeframes(top50Symbols, tfsToFetch, 200, futuresOnly);
+        const klinesMap = await fetchKlinesByTimeframes(top50Symbols, tfsToFetch, 200);
         if (controller.signal.aborted) return;
 
         for (const symbol of top50Symbols) {
@@ -173,9 +152,9 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
         setIsLoading(false);
       }
     }
-  }, [columnsKey, rankingTimeframe, futuresOnly, klineInterval]);
+  }, [columnsKey, rankingTimeframe, klineInterval]);
 
-  // Initial fetch + auto-refresh; restart whenever columns, ranking, futuresOnly, or refreshInterval changes
+  // Initial fetch + auto-refresh; restart whenever columns, ranking, or refreshInterval changes
   useEffect(() => {
     fetchData();
     clearInterval(refreshIntervalTimerRef.current);

@@ -1,6 +1,5 @@
 import type { BinanceTicker24hr, BinanceKline } from '../types';
 
-const BASE_URL = 'https://api.binance.com';
 const FUTURES_BASE = 'https://fapi.binance.com';
 const FETCH_TIMEOUT = 10000;
 const BATCH_SIZE = 10;
@@ -30,10 +29,8 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function fetchAll24hrTickers(futuresOnly: boolean): Promise<BinanceTicker24hr[]> {
-  const url = futuresOnly
-    ? `${FUTURES_BASE}/fapi/v1/ticker/24hr`
-    : `${BASE_URL}/api/v3/ticker/24hr`;
+export async function fetchAll24hrTickers(): Promise<BinanceTicker24hr[]> {
+  const url = FUTURES_BASE + '/fapi/v1/ticker/24hr';
   const response = await fetchWithTimeout(url);
   let tickers: BinanceTicker24hr[];
   try {
@@ -107,40 +104,6 @@ function computeStatsFromKlines(symbol: string, klines: BinanceKline[]): Binance
   } as unknown as BinanceTicker24hr;
 }
 
-async function fetchFuturesWindowedStats(
-  symbols: string[],
-  windowSize: string,
-): Promise<BinanceTicker24hr[]> {
-  const minutes = windowToMinutes(windowSize);
-  const limit = Math.min(Math.max(minutes, 1), 1500);
-  const result: BinanceTicker24hr[] = [];
-
-  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-    const batch = symbols.slice(i, i + BATCH_SIZE);
-    const settled = await Promise.allSettled(
-      batch.map(async (symbol) => {
-        const response = await fetchWithTimeout(
-          `${FUTURES_BASE}/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${limit}`,
-        );
-        const klines = (await response.json()) as BinanceKline[];
-        return { symbol, klines };
-      }),
-    );
-
-    for (const outcome of settled) {
-      if (outcome.status !== 'fulfilled') continue;
-      const ticker = computeStatsFromKlines(outcome.value.symbol, outcome.value.klines);
-      if (ticker) result.push(ticker);
-    }
-
-    if (i + BATCH_SIZE < symbols.length) {
-      await delay(BATCH_DELAY);
-    }
-  }
-
-  return result;
-}
-
 // Fetches 1m klines ONCE per symbol for the largest requested window, then derives
 // per-window stats from the cached klines. Reduces futures requests from N*symbols
 // to 1*symbols per refresh cycle.
@@ -189,46 +152,13 @@ export async function fetchFuturesAllWindowedStats(
   return result;
 }
 
-export async function fetch1hrTickers(
-  symbols: string[],
-  windowSize = '1h',
-  futuresOnly = false,
-): Promise<BinanceTicker24hr[]> {
-  if (futuresOnly) {
-    return fetchFuturesWindowedStats(symbols, windowSize);
-  }
-  const result: BinanceTicker24hr[] = [];
-
-  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-    const batch = symbols.slice(i, i + BATCH_SIZE);
-    const symbolsParam = encodeURIComponent(JSON.stringify(batch));
-    const response = await fetchWithTimeout(
-      `${BASE_URL}/api/v3/ticker?windowSize=${windowSize}&symbols=${symbolsParam}`,
-    );
-    let tickers: BinanceTicker24hr[];
-    try {
-      tickers = (await response.json()) as BinanceTicker24hr[];
-    } catch {
-      throw new Error('Failed to parse windowed ticker response from Binance');
-    }
-    result.push(...tickers);
-    if (i + BATCH_SIZE < symbols.length) {
-      await delay(BATCH_DELAY);
-    }
-  }
-  return result;
-}
-
 export async function fetchKlines(
   symbol: string,
   interval = '1h',
   limit = 24,
-  futuresOnly = false,
 ): Promise<BinanceKline[]> {
-  const base = futuresOnly ? FUTURES_BASE : BASE_URL;
-  const path = futuresOnly ? '/fapi/v1/klines' : '/api/v3/klines';
   const response = await fetchWithTimeout(
-    `${base}${path}?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+    `${FUTURES_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
   );
   return response.json();
 }
@@ -237,7 +167,6 @@ export async function fetchSparklineData(
   symbols: string[],
   interval = '15m',
   limit = 100,
-  futuresOnly = false,
 ): Promise<Map<string, number[]>> {
   const result = new Map<string, number[]>();
 
@@ -245,7 +174,7 @@ export async function fetchSparklineData(
     const batch = symbols.slice(i, i + BATCH_SIZE);
 
     const settled = await Promise.allSettled(
-      batch.map((symbol) => fetchKlines(symbol, interval, limit, futuresOnly)),
+      batch.map((symbol) => fetchKlines(symbol, interval, limit)),
     );
 
     batch.forEach((symbol, index) => {
@@ -270,11 +199,8 @@ export async function fetchKlinesByTimeframes(
   symbols: string[],
   timeframes: string[],
   limit = 50,
-  futuresOnly = false,
 ): Promise<Map<string, Record<string, number[]>>> {
   const result = new Map<string, Record<string, number[]>>();
-  const base = futuresOnly ? FUTURES_BASE : BASE_URL;
-  const path = futuresOnly ? '/fapi/v1/klines' : '/api/v3/klines';
 
   for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
     const batch = symbols.slice(i, i + BATCH_SIZE);
@@ -285,7 +211,7 @@ export async function fetchKlinesByTimeframes(
           timeframes.map(async (tf) => {
             try {
               const response = await fetchWithTimeout(
-                `${base}${path}?symbol=${symbol}&interval=${tf}&limit=${limit}`,
+                `${FUTURES_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${tf}&limit=${limit}`,
               );
               const klines = (await response.json()) as BinanceKline[];
               tfCloses[tf] = klines.map((k) => parseFloat(k[4]));
@@ -318,18 +244,15 @@ export async function fetchKlinesByTimeframes(
 export async function fetchTodayChangeSinceMidnight(
   symbols: string[],
   sinceUtcMs: number,
-  futuresOnly = false,
 ): Promise<Map<string, number>> {
   const result = new Map<string, number>();
-  const base = futuresOnly ? FUTURES_BASE : BASE_URL;
-  const path = futuresOnly ? '/fapi/v1/klines' : '/api/v3/klines';
 
   for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
     const batch = symbols.slice(i, i + BATCH_SIZE);
     const settled = await Promise.allSettled(
       batch.map(async (symbol) => {
         const response = await fetchWithTimeout(
-          `${base}${path}?symbol=${symbol}&interval=15m&startTime=${sinceUtcMs}&limit=100`,
+          `${FUTURES_BASE}/fapi/v1/klines?symbol=${symbol}&interval=15m&startTime=${sinceUtcMs}&limit=100`,
         );
         const klines = (await response.json()) as BinanceKline[];
         return { symbol, klines };

@@ -63,21 +63,6 @@ const SettingsBar: FC<SettingsBarProps> = ({ settings, onChange, onOpenSettings,
           active={settings.refreshInterval}
           onSelect={(v) => onChange({ ...settings, refreshInterval: v as number })}
         />
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-[#848e9c] font-medium">Futures Only</span>
-          <button
-            onClick={() => !isLoading && onChange({ ...settings, futuresOnly: !settings.futuresOnly })}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              settings.futuresOnly ? 'bg-[#F0B90B]' : 'bg-[#2b3139]'
-            }`}
-          >
-            <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                settings.futuresOnly ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </div>
         <button
           type="button"
           aria-label="Open settings"

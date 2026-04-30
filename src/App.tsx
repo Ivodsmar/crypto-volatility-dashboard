@@ -9,13 +9,12 @@ import SettingsPanel from './components/SettingsPanel';
 import type { VolatilityColumn } from './types';
 import { isValidWindowSize } from './api/binance';
 
-const STORAGE_KEY = 'crypto-volatility-dashboard/settings/v3';
+const STORAGE_KEY = 'crypto-volatility-dashboard/settings/v4';
 
 function loadInitialSettings(): CryptoSettings {
   let customColumns: string[] = [];
   let rankingTimeframe = '1h';
   let refreshInterval = 300;
-  let futuresOnly = true;
   let klineInterval = '15m';
 
   try {
@@ -27,7 +26,6 @@ function loadInitialSettings(): CryptoSettings {
           customColumns?: unknown;
           rankingTimeframe?: unknown;
           refreshInterval?: unknown;
-          futuresOnly?: unknown;
           klineInterval?: unknown;
         };
 
@@ -41,7 +39,6 @@ function loadInitialSettings(): CryptoSettings {
 
         if (typeof saved.rankingTimeframe === 'string') rankingTimeframe = saved.rankingTimeframe;
         if (typeof saved.refreshInterval === 'number') refreshInterval = saved.refreshInterval;
-        if (typeof saved.futuresOnly === 'boolean') futuresOnly = saved.futuresOnly;
         if (typeof saved.klineInterval === 'string' && /^\d+m$/.test(saved.klineInterval)) klineInterval = saved.klineInterval;
       }
     }
@@ -54,7 +51,7 @@ function loadInitialSettings(): CryptoSettings {
     ...customColumns.map((tf) => ({ timeframe: tf, fixed: false })),
   ];
 
-  return { columns, rankingTimeframe, refreshInterval, futuresOnly, klineInterval };
+  return { columns, rankingTimeframe, refreshInterval, klineInterval };
 }
 
 function App(): React.ReactElement {
@@ -68,7 +65,6 @@ function App(): React.ReactElement {
         customColumns: settings.columns.filter((c) => !c.fixed).map((c) => c.timeframe),
         rankingTimeframe: settings.rankingTimeframe,
         refreshInterval: settings.refreshInterval,
-        futuresOnly: settings.futuresOnly,
         klineInterval: settings.klineInterval,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -106,9 +102,9 @@ function App(): React.ReactElement {
         onClose={() => setSettingsOpen(false)}
       />
       <footer className="max-w-[1400px] mx-auto px-4 py-4 text-center text-[11px] text-[#474d57]">
-        Data from Binance API · Ranked by {settings.rankingTimeframe} volatility
-        {settings.futuresOnly ? ' · Futures pairs only' : ''}
-        {' '}· Refreshes every {settings.refreshInterval >= 60 ? `${settings.refreshInterval / 60}m` : `${settings.refreshInterval}s`}
+        Data from Binance API {'\u00b7'} Ranked by {settings.rankingTimeframe} volatility
+        {' \u00b7 Refreshes every '}
+        {settings.refreshInterval >= 60 ? `${settings.refreshInterval / 60}m` : `${settings.refreshInterval}s`}
       </footer>
     </div>
   );
