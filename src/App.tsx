@@ -9,7 +9,7 @@ import SettingsPanel from './components/SettingsPanel';
 import type { VolatilityColumn } from './types';
 import { isValidWindowSize } from './api/binance';
 
-const STORAGE_KEY = 'crypto-volatility-dashboard/settings/v2';
+const STORAGE_KEY = 'crypto-volatility-dashboard/settings/v3';
 
 function loadInitialSettings(): CryptoSettings {
   let customColumns: string[] = [];

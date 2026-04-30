@@ -98,6 +98,7 @@ export function processAndRankTickers(
       lowPrice: parseFloat(ticker24h.lowPrice) || 0,
       openPrice: parseFloat(ticker24h.openPrice) || 0,
       stochRsi: { k: null, d: null },
+      stochRsiByWindow: {},
       sparklineData: [],
     });
   }

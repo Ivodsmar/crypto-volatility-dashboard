@@ -56,5 +56,6 @@ export interface CryptoData {
   lowPrice: number;
   openPrice: number;
   stochRsi: { k: number | null; d: number | null };
+  stochRsiByWindow: Record<string, { k: number | null; d: number | null }>;
   sparklineData: number[];
 }

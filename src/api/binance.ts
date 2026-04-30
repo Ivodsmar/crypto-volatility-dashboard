@@ -264,6 +264,53 @@ export async function fetchSparklineData(
   return result;
 }
 
+// Fetches close-price arrays for each symbol × timeframe combination.
+// Used to compute per-timeframe StochRSI client-side.
+export async function fetchKlinesByTimeframes(
+  symbols: string[],
+  timeframes: string[],
+  limit = 50,
+  futuresOnly = false,
+): Promise<Map<string, Record<string, number[]>>> {
+  const result = new Map<string, Record<string, number[]>>();
+  const base = futuresOnly ? FUTURES_BASE : BASE_URL;
+  const path = futuresOnly ? '/fapi/v1/klines' : '/api/v3/klines';
+
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const settled = await Promise.allSettled(
+      batch.map(async (symbol) => {
+        const tfCloses: Record<string, number[]> = {};
+        await Promise.all(
+          timeframes.map(async (tf) => {
+            try {
+              const response = await fetchWithTimeout(
+                `${base}${path}?symbol=${symbol}&interval=${tf}&limit=${limit}`,
+              );
+              const klines = (await response.json()) as BinanceKline[];
+              tfCloses[tf] = klines.map((k) => parseFloat(k[4]));
+            } catch {
+              tfCloses[tf] = [];
+            }
+          }),
+        );
+        return { symbol, tfCloses };
+      }),
+    );
+
+    for (const outcome of settled) {
+      if (outcome.status !== 'fulfilled') continue;
+      result.set(outcome.value.symbol, outcome.value.tfCloses);
+    }
+
+    if (i + BATCH_SIZE < symbols.length) {
+      await delay(BATCH_DELAY);
+    }
+  }
+
+  return result;
+}
+
 // Fetches % change since `sinceUtcMs` for each symbol using 15m klines.
 // Used for the "Today %" column: user's local midnight as UTC ms -> change from
 // the first kline's open to the last kline's close. Matches Binance's

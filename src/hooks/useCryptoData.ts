@@ -5,8 +5,10 @@ import {
   fetchFuturesAllWindowedStats,
   fetchSparklineData,
   fetchTodayChangeSinceMidnight,
+  fetchKlinesByTimeframes,
 } from '../api/binance';
 import { processAndRankTickers, preRankBy24h, calculateStochRSI } from '../utils/volatility';
+
 import type { CryptoData, VolatilityColumn, BinanceTicker24hr } from '../types';
 
 export interface CryptoSettings {
@@ -18,11 +20,10 @@ export interface CryptoSettings {
 }
 
 export const FIXED_COLUMNS: VolatilityColumn[] = [
-  { timeframe: '1h', fixed: true },
-  { timeframe: '30m', fixed: true },
+  { timeframe: '5m', fixed: true },
   { timeframe: '15m', fixed: true },
-  { timeframe: '3m', fixed: true },
-  { timeframe: '1m', fixed: true },
+  { timeframe: '30m', fixed: true },
+  { timeframe: '1h', fixed: true },
 ];
 
 export interface UseCryptoDataReturn {
@@ -89,19 +90,27 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       midnight.setHours(0, 0, 0, 0);
       const sinceMidnightMs = midnight.getTime();
 
-      const [sparklineMap, todayChangeMap] = await Promise.all([
+      const [sparklineMap, todayChangeMap, stochRsiKlinesMap] = await Promise.all([
         fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly),
         fetchTodayChangeSinceMidnight(top50Symbols, sinceMidnightMs, futuresOnly),
+        fetchKlinesByTimeframes(top50Symbols, timeframes, 50, futuresOnly),
       ]);
       if (controller.signal.aborted) return;
       const merged = top50.map((item) => {
         const prices = sparklineMap.get(item.symbol) ?? [];
         const todayPct = todayChangeMap.get(item.symbol);
+        const tfKlines = stochRsiKlinesMap.get(item.symbol) ?? {};
+        const stochRsiByWindow: Record<string, { k: number | null; d: number | null }> = {};
+        for (const tf of timeframes) {
+          const closes = tfKlines[tf] ?? [];
+          stochRsiByWindow[tf] = closes.length > 0 ? calculateStochRSI(closes) : { k: null, d: null };
+        }
         return {
           ...item,
           priceChangePercent: todayPct ?? item.priceChangePercent,
           sparklineData: prices,
           stochRsi: prices.length > 0 ? calculateStochRSI(prices) : { k: null, d: null },
+          stochRsiByWindow,
         };
       });
 

@@ -1,4 +1,4 @@
-import { FC, useMemo } from 'react';
+import { FC, Fragment, useMemo } from 'react';
 import type { CryptoData, VolatilityColumn } from '../types';
 import { formatPrice, formatPercent, formatVolume } from '../utils/volatility';
 import SparklineChart from './SparklineChart';
@@ -10,21 +10,25 @@ interface CryptoTableProps {
   columns: VolatilityColumn[];
 }
 
-const SkeletonRow: FC<{ index: number; columnCount: number }> = ({ index, columnCount }) => (
-  <tr className="border-b border-[#2b3139]">
-    {Array.from({ length: 8 + columnCount }).map((_, colIdx) => (
-      <td key={colIdx} className="px-3 py-3">
-        <div
-          className="h-4 bg-[#2b3139] rounded animate-pulse"
-          style={{
-            width: colIdx === 7 + columnCount ? '100px' : `${40 + ((index + colIdx) % 4) * 15}px`,
-            animationDelay: `${(index * 8 + colIdx) * 50}ms`,
-          }}
-        />
-      </td>
-    ))}
-  </tr>
-);
+// Each timeframe gets 2 columns (% + StochRSI); Today%+StochRSI = 2; Volatility+Volume+Sparkline = 3; #+Name+Price = 3
+const SkeletonRow: FC<{ index: number; columnCount: number }> = ({ index, columnCount }) => {
+  const totalCols = 3 + columnCount * 2 + 2 + 3; // #/Name/Price + tf pairs + Today/StochRSI + Vol/Vol/Spark
+  return (
+    <tr className="border-b border-[#2b3139]">
+      {Array.from({ length: totalCols }).map((_, colIdx) => (
+        <td key={colIdx} className="px-3 py-3">
+          <div
+            className="h-4 bg-[#2b3139] rounded animate-pulse"
+            style={{
+              width: colIdx === totalCols - 1 ? '100px' : `${40 + ((index + colIdx) % 4) * 15}px`,
+              animationDelay: `${(index * 8 + colIdx) * 50}ms`,
+            }}
+          />
+        </td>
+      ))}
+    </tr>
+  );
+};
 
 const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
   const maxVolatility = useMemo(() => {
@@ -55,21 +59,23 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
               Price
             </th>
             {columns.map((c) => (
-              <th
-                key={c.timeframe}
-                className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]"
-              >
-                {c.timeframe} %
-              </th>
+              <Fragment key={c.timeframe}>
+                <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
+                  {c.timeframe} %
+                </th>
+                <th className="px-2 py-2.5 text-center text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
+                  StochRSI
+                </th>
+              </Fragment>
             ))}
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Today %
             </th>
+            <th className="px-2 py-2.5 text-center text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
+              StochRSI
+            </th>
             <th className="px-3 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Volatility
-            </th>
-            <th className="px-3 py-2.5 text-center text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
-              StochRSI
             </th>
             <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-[#848e9c]">
               Volume (24h)
@@ -94,7 +100,7 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
                     <td className="px-3 py-2.5 text-[#848e9c] text-xs">{index + 1}</td>
                     <td className="px-3 py-2.5">
                       <a
-                        href={`https://www.binance.com/en/trade/${coin.displaySymbol}_USDT`}
+                        href={`https://www.binance.com/en/futures/${coin.symbol}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2.5 group"
@@ -111,22 +117,49 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
                     </td>
                     {columns.map((c) => {
                       const v = coin.priceChangePercentByWindow[c.timeframe] ?? 0;
+                      const rsi = coin.stochRsiByWindow?.[c.timeframe];
                       return (
-                        <td key={c.timeframe} className="px-3 py-2.5 text-right font-mono text-xs">
-                          <span className={v >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}>
-                            {formatPercent(v)}
-                          </span>
-                        </td>
+                        <Fragment key={c.timeframe}>
+                          <td className="px-3 py-2.5 text-right font-mono text-xs">
+                            <span className={v >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}>
+                              {formatPercent(v)}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2.5 text-center">
+                            {!rsi || (rsi.k === null && rsi.d === null) ? (
+                              <span className="text-[#474d57] text-xs">—</span>
+                            ) : (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className={`font-mono text-xs ${rsi.k !== null && rsi.k >= 80 ? 'text-[#f6465d]' : rsi.k !== null && rsi.k <= 20 ? 'text-[#0ecb81]' : 'text-[#b7bdc6]'}`}>
+                                  {rsi.k !== null ? rsi.k.toFixed(1) : '—'}
+                                </span>
+                                <span className="font-mono text-[10px] text-[#474d57]">
+                                  {rsi.d !== null ? rsi.d.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        </Fragment>
                       );
                     })}
                     <td className="px-3 py-2.5 text-right font-mono text-xs">
-                      <span
-                        className={
-                          coin.priceChangePercent >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
-                        }
-                      >
+                      <span className={coin.priceChangePercent >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}>
                         {formatPercent(coin.priceChangePercent)}
                       </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-center">
+                      {coin.stochRsi.k === null && coin.stochRsi.d === null ? (
+                        <span className="text-[#474d57] text-xs">—</span>
+                      ) : (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`font-mono text-xs ${coin.stochRsi.k !== null && coin.stochRsi.k >= 80 ? 'text-[#f6465d]' : coin.stochRsi.k !== null && coin.stochRsi.k <= 20 ? 'text-[#0ecb81]' : 'text-[#b7bdc6]'}`}>
+                            {coin.stochRsi.k !== null ? coin.stochRsi.k.toFixed(1) : '—'}
+                          </span>
+                          <span className="font-mono text-[10px] text-[#474d57]">
+                            {coin.stochRsi.d !== null ? coin.stochRsi.d.toFixed(1) : '—'}
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
@@ -148,28 +181,6 @@ const CryptoTable: FC<CryptoTableProps> = ({ data, isLoading, columns }) => {
                           />
                         </div>
                       </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {coin.stochRsi.k === null && coin.stochRsi.d === null ? (
-                        <span className="text-[#474d57] text-xs">—</span>
-                      ) : (
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span
-                            className={`font-mono text-xs ${
-                              coin.stochRsi.k !== null && coin.stochRsi.k >= 80
-                                ? 'text-[#f6465d]'
-                                : coin.stochRsi.k !== null && coin.stochRsi.k <= 20
-                                  ? 'text-[#0ecb81]'
-                                  : 'text-[#b7bdc6]'
-                            }`}
-                          >
-                            {coin.stochRsi.k !== null ? coin.stochRsi.k.toFixed(1) : '—'}
-                          </span>
-                          <span className="font-mono text-[10px] text-[#474d57]">
-                            {coin.stochRsi.d !== null ? coin.stochRsi.d.toFixed(1) : '—'}
-                          </span>
-                        </div>
-                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-[#b7bdc6]">
                       {formatVolume(coin.volume)}
