@@ -115,7 +115,9 @@ export function calculateStochRSI(
   kSmooth = 3,
   dSmooth = 3,
 ): { k: number | null; d: number | null } {
-  if (closePrices.length < rsiLength + stochLength + kSmooth + dSmooth) {
+  // Need rsiLength bars for first RSI + stochLength for first raw K +
+  // (kSmooth-1) for first smooth K + (dSmooth-1) for first smooth D
+  if (closePrices.length < rsiLength + stochLength + kSmooth + dSmooth - 2) {
     return { k: null, d: null };
   }
 

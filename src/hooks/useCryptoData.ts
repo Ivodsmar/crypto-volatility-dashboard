@@ -93,7 +93,7 @@ export function useCryptoData(settings: CryptoSettings): UseCryptoDataReturn {
       const [sparklineMap, todayChangeMap, stochRsiKlinesMap] = await Promise.all([
         fetchSparklineData(top50Symbols, klineInterval, 100, futuresOnly),
         fetchTodayChangeSinceMidnight(top50Symbols, sinceMidnightMs, futuresOnly),
-        fetchKlinesByTimeframes(top50Symbols, timeframes, 50, futuresOnly),
+        fetchKlinesByTimeframes(top50Symbols, timeframes, 100, futuresOnly),
       ]);
       if (controller.signal.aborted) return;
       const merged = top50.map((item) => {
