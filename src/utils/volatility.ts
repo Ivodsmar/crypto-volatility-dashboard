@@ -103,7 +103,12 @@ export function processAndRankTickers(
     });
   }
 
-  processed.sort((a, b) => b.volatilityScore - a.volatilityScore);
+  processed.sort((a, b) => {
+    const aPct = a.priceChangePercentByWindow[rankingTimeframe] ?? 0;
+    const bPct = b.priceChangePercentByWindow[rankingTimeframe] ?? 0;
+    if (bPct !== aPct) return bPct - aPct;
+    return b.volatilityScore - a.volatilityScore;
+  });
 
   return processed.slice(0, 50);
 }
